@@ -34,7 +34,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 # Model names are case-sensitive in Ollama; must match 'ollama list' output exactly
 # qwen2.5:7b provides much better JSON reliability than qwen3:4B for structured output
 TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b")
-VISION_MODEL = os.getenv("VISION_MODEL", "qwen2.5VL:3B")
+VISION_MODEL = os.getenv("VISION_MODEL", "qwen2.5vl:3b")
 
 # ---------------------------------------------------------------------------
 # PostgreSQL (dedicated watcher database, public schema)

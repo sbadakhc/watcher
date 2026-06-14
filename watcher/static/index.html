@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cashi Shop</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --c-primary:#6366f1;--c-primary-dark:#4f46e5;--c-secondary:#8b5cf6;
+    --c-success:#22c55e;--c-danger:#ef4444;--c-warning:#f59e0b;
+    --c-dark:#0f172a;--c-gray:#64748b;--c-light:#f1f5f9;--c-white:#fff;
+    --c-accent:#06b6d4;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       background:var(--c-light);color:var(--c-dark);min-height:100vh}
+  a{text-decoration:none;color:inherit}
+  button{cursor:pointer;font-family:inherit}
+  input,select,textarea{font-family:inherit}
+
+  /* NAV */
+  #nav{background:var(--c-white);height:64px;display:flex;justify-content:space-between;
+       align-items:center;padding:0 2rem;box-shadow:0 1px 3px rgba(0,0,0,.1);
+       position:sticky;top:0;z-index:100}
+  #nav-brand{display:flex;align-items:center;gap:.75rem;cursor:pointer}
+  #nav-logo{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;
+            justify-content:center;font-size:1.5rem;
+            background:linear-gradient(135deg,var(--c-primary),var(--c-secondary))}
+  #nav-title{font-size:1.25rem;font-weight:800;letter-spacing:-.025em}
+  #nav-sub{font-size:.75rem;color:var(--c-gray);font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+  #nav-actions{display:flex;align-items:center;gap:1rem}
+  .user-chip{display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;
+             border-radius:20px;border:1px solid}
+  .user-chip.seller{background:#e0e7ff;border-color:#c7d2fe}
+  .user-chip.admin{background:#fef3c7;border-color:#fbbf24}
+  .role-badge{font-size:.65rem;font-weight:700;text-transform:uppercase;
+              padding:.125rem .5rem;border-radius:10px;color:#fff}
+  .role-badge.seller{background:var(--c-primary)}
+  .role-badge.admin{background:#f59e0b;color:#92400e}
+  .nav-link{color:var(--c-gray);font-weight:600;font-size:.9rem;padding:.5rem 1rem;
+            border-radius:8px;border:none;background:transparent;transition:all .2s}
+  .nav-link:hover{background:var(--c-light);color:var(--c-dark)}
+
+  /* BUTTONS */
+  .btn{padding:.6rem 1.5rem;border-radius:10px;font-weight:700;font-size:.95rem;
+       border:none;transition:all .2s}
+  .btn-primary{background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));
+               color:#fff;box-shadow:0 4px 6px -1px rgba(99,102,241,.3)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px rgba(99,102,241,.4)}
+  .btn-primary:disabled{background:#cbd5e1;box-shadow:none;transform:none;cursor:not-allowed}
+  .btn-outline{background:transparent;border:1.5px solid var(--c-gray);color:var(--c-gray)}
+  .btn-outline:hover{background:var(--c-danger);border-color:var(--c-danger);color:#fff}
+  .btn-success{background:#27ae60;color:#fff;border:none}
+  .btn-danger{background:var(--c-danger);color:#fff;border:none}
+  .btn-sm{padding:.5rem .875rem;font-size:.875rem;border-radius:8px}
+  .btn-ghost{background:transparent;border:none;color:var(--c-gray);font-weight:600;
+             width:100%;padding:.75rem;border-radius:10px;font-size:.95rem}
+  .btn-ghost:hover{background:var(--c-light);color:var(--c-dark)}
+
+  /* MAIN CONTENT */
+  #main{max-width:1200px;margin:0 auto;padding:2rem}
+  .page{display:none}
+  .page.active{display:block}
+
+  /* CARDS */
+  .card{background:var(--c-white);border-radius:16px;
+        box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06)}
+
+  /* GRID */
+  .grid{display:grid;gap:2rem}
+  .grid-auto{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+  .grid-3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+
+  /* FORMS */
+  .form-group{margin-bottom:1.5rem}
+  label{display:block;font-weight:700;font-size:.95rem;margin-bottom:.5rem}
+  .input{width:100%;padding:.875rem 1rem;border:2px solid #e2e8f0;border-radius:10px;
+         font-size:1rem;outline:none;transition:border-color .2s}
+  .input:focus{border-color:var(--c-primary)}
+  textarea.input{resize:vertical}
+  select.input{background:var(--c-white);cursor:pointer}
+  .input-icon{position:relative}
+  .input-icon .icon{position:absolute;left:1rem;top:50%;transform:translateY(-50%);
+                    font-size:1.1rem;opacity:.5;pointer-events:none}
+  .input-icon .input{padding-left:2.75rem}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);
+                 backdrop-filter:blur(8px);display:flex;align-items:center;
+                 justify-content:center;z-index:1000;animation:fadeIn .2s}
+  .modal{background:var(--c-white);padding:2.5rem;border-radius:16px;width:100%;
+         max-width:420px;box-shadow:0 25px 50px -12px rgba(0,0,0,.25);animation:slideUp .3s}
+  .modal-header{text-align:center;margin-bottom:2rem}
+  .modal-icon{width:56px;height:56px;border-radius:14px;margin:0 auto 1rem;
+              display:flex;align-items:center;justify-content:center;font-size:1.75rem;
+              background:linear-gradient(135deg,var(--c-primary),var(--c-secondary))}
+  .modal-title{font-size:1.5rem;font-weight:800}
+  .modal-sub{color:var(--c-gray);font-size:.95rem;margin-top:.5rem}
+
+  /* ALERT */
+  .alert{padding:.875rem 1rem;border-radius:10px;margin-bottom:1.5rem;
+         font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:.5rem}
+  .alert-error{background:#fef2f2;color:var(--c-danger);border:1px solid #fecaca}
+  .alert-success{background:#f0fdf4;color:#15803d;border:1px solid #86efac}
+
+  /* HERO */
+  .hero{position:relative;overflow:hidden;
+        background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%);
+        color:#fff;padding:4rem 2rem;border-radius:16px;margin-bottom:2.5rem;
+        min-height:280px;display:flex;flex-direction:column;justify-content:center;
+        align-items:center;text-align:center;box-shadow:0 25px 50px -12px rgba(76,29,149,.4)}
+  .hero-float{position:absolute;animation:float 4s ease-in-out infinite}
+  .hero h1{font-size:3.5rem;font-weight:900;letter-spacing:-.02em;
+           text-shadow:0 4px 20px rgba(0,0,0,.3);position:relative;z-index:2}
+  .hero p{font-size:1.35rem;opacity:.95;position:relative;z-index:2}
+
+  /* LISTING CARD */
+  .listing-card{border-radius:16px;overflow:hidden;transition:all .3s cubic-bezier(.4,0,.2,1);cursor:pointer}
+  .listing-card:hover{transform:translateY(-8px);box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+  .listing-img{height:240px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);
+               display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+  .listing-img img{width:100%;height:100%;object-fit:cover;transition:transform .3s}
+  .listing-card:hover .listing-img img{transform:scale(1.05)}
+  .listing-body{padding:1.5rem}
+  .listing-title{font-size:1.2rem;font-weight:700;margin-bottom:.5rem;line-height:1.3}
+  .listing-desc{color:var(--c-gray);font-size:.95rem;line-height:1.5;margin-bottom:1.25rem;
+                overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .listing-footer{display:flex;justify-content:space-between;align-items:center}
+  .listing-price{font-size:1.5rem;font-weight:800;color:var(--c-primary);letter-spacing:-.02em}
+  .badge{display:inline-block;padding:.25rem .6rem;border-radius:6px;font-size:.75rem;
+         font-weight:600;background:#eef2ff;color:var(--c-primary);margin-bottom:.75rem}
+  .badge-new{position:absolute;top:12px;left:12px;background:var(--c-accent);color:#fff;
+             padding:.35rem .85rem;border-radius:20px;font-size:.75rem;font-weight:700;
+             text-transform:uppercase;letter-spacing:.05em;z-index:10}
+
+  /* REVIEW CARD */
+  .ai-box{background:#f8f9fa;padding:.75rem;border-radius:8px;margin-bottom:1rem;font-size:.85rem}
+  .ai-approve{color:#27ae60}
+  .ai-reject{color:var(--c-danger)}
+  .ai-review{color:var(--c-warning)}
+  .priority-badge{padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:700;
+                  text-transform:uppercase}
+  .priority-high{background:#ffebee;color:#c62828}
+  .priority-medium{background:#fff3e0;color:#ef6c00}
+  .priority-low{background:#e8f5e9;color:#2e7d32}
+  .action-row{display:flex;gap:.75rem;margin-bottom:.75rem}
+  .action-row2{display:flex;gap:.5rem}
+
+  /* STATS */
+  .stat-card{background:var(--c-white);padding:1.5rem;border-radius:8px;
+             box-shadow:0 2px 4px rgba(0,0,0,.1);text-align:center}
+  .stat-value{font-size:2rem;font-weight:700}
+  .stat-label{margin-top:.5rem;color:var(--c-gray)}
+
+  /* UPLOAD */
+  .upload-zone{border:2px dashed #cbd5e1;border-radius:12px;padding:2rem;text-align:center;
+               transition:all .2s;cursor:pointer}
+  .upload-zone:hover,.upload-zone.drag{border-color:var(--c-primary);background:#eef2ff}
+  .upload-zone .icon{font-size:2.5rem;margin-bottom:.75rem}
+  .upload-zone p{color:var(--c-gray);font-size:.95rem;margin-bottom:1rem}
+
+  /* STATUS BADGES */
+  .status-approved{background:#f0fdf4;color:var(--c-success)}
+  .status-rejected{background:#fef2f2;color:var(--c-danger)}
+  .status-pending{background:#fffbeb;color:var(--c-warning)}
+  .status-badge{display:inline-block;padding:.35rem .75rem;border-radius:20px;
+                font-size:.8rem;font-weight:700;margin-bottom:.75rem}
+
+  /* EMPTY STATE */
+  .empty{text-align:center;padding:5rem 2rem}
+  .empty .icon{font-size:4rem;margin-bottom:1.5rem}
+  .empty h2{font-size:1.5rem;font-weight:700;margin-bottom:.75rem}
+  .empty p{color:var(--c-gray);font-size:1.1rem;max-width:400px;margin:0 auto}
+
+  /* SPINNER */
+  .spinner{width:48px;height:48px;border:4px solid var(--c-light);
+           border-top:4px solid var(--c-primary);border-radius:50%;
+           margin:0 auto 1rem;animation:spin 1s linear infinite}
+  .loading{text-align:center;padding:4rem}
+  .sm-spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);
+              border-top:2px solid #fff;border-radius:50%;
+              display:inline-block;animation:spin 1s linear infinite;vertical-align:middle}
+
+  /* FORM PAGE */
+  .form-page{max-width:640px;margin:0 auto}
+  .page-header{margin-bottom:2rem}
+  .page-header h2{font-size:1.75rem;font-weight:800;margin-bottom:.5rem}
+  .page-header p{color:var(--c-gray);font-size:1rem}
+
+  /* SUCCESS */
+  .success-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:2.5rem;
+               border-radius:16px;text-align:center;border:2px solid #86efac}
+  .success-box .icon{font-size:4rem;margin-bottom:1rem}
+  .success-box h3{color:#15803d;font-size:1.5rem;font-weight:800;margin-bottom:.75rem}
+  .success-box p{color:#166534;font-size:1.05rem;margin-bottom:1.5rem}
+
+  /* SECTION HEADER */
+  .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+  .section-header h2{font-size:1.5rem;font-weight:700}
+
+  /* ANIMATIONS */
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-20px) rotate(5deg)}}
+  @keyframes float2{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-15px) rotate(-5deg)}}
+  @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+
+  /* RESPONSIVE */
+  @media(max-width:640px){
+    #main{padding:1rem}
+    .hero h1{font-size:2.5rem}
+    .hero-float{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <div id="nav-brand" onclick="navigate('/')">
+    <div id="nav-logo">&#x1f3ea;</div>
+    <div>
+      <div id="nav-title">Cashi Shop</div>
+      <div id="nav-sub">Marketplace</div>
+    </div>
+  </div>
+  <div id="nav-actions">
+    <span id="nav-user-area"></span>
+    <button id="nav-login-btn" class="btn btn-primary" onclick="showLoginModal()">&#x1f510; Login</button>
+    <button id="nav-logout-btn" class="btn btn-outline" style="display:none" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- STOREFRONT PAGE -->
+  <div id="page-home" class="page active">
+    <div class="hero">
+      <div class="hero-float" style="top:15%;left:10%;font-size:3rem;animation-duration:4s">&#x1f6cd;&#xfe0f;</div>
+      <div class="hero-float" style="top:20%;right:12%;font-size:2.5rem;animation:float2 5s ease-in-out infinite">&#x1f6d2;</div>
+      <div class="hero-float" style="bottom:20%;left:15%;font-size:2rem;animation:pulse 3s ease-in-out infinite">&#x1f4b0;</div>
+      <div class="hero-float" style="bottom:25%;right:18%;font-size:1.8rem;animation:pulse 3.5s ease-in-out infinite .5s">&#x1f48e;</div>
+      <div class="hero-float" style="top:40%;left:5%;font-size:1.2rem;animation:pulse 2s ease-in-out infinite">&#x2728;</div>
+      <div class="hero-float" style="top:35%;right:8%;font-size:1.5rem;animation:pulse 2.5s ease-in-out infinite 1s">&#x2b50;</div>
+      <h1>Cashi Shop</h1>
+      <p>Buy &amp; Sell</p>
+    </div>
+    <div id="storefront-content"></div>
+  </div>
+
+  <!-- SUBMIT PAGE -->
+  <div id="page-submit" class="page">
+    <div class="form-page">
+      <div class="page-header">
+        <h2>Create Listing</h2>
+        <p>Fill in the details below to list your item for sale.</p>
+      </div>
+      <div id="submit-content"></div>
+    </div>
+  </div>
+
+  <!-- REVIEW PAGE -->
+  <div id="page-review" class="page">
+    <div id="review-content"></div>
+  </div>
+
+  <!-- DASHBOARD PAGE -->
+  <div id="page-dashboard" class="page">
+    <div class="page-header">
+      <h2>My Listings</h2>
+      <p>Track your submissions and manage your listings.</p>
+    </div>
+    <div id="dashboard-content"></div>
+  </div>
+
+</div>
+
+<!-- LOGIN MODAL (hidden by default) -->
+<div id="login-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon">&#x1f510;</div>
+      <div class="modal-title">Welcome Back</div>
+      <div class="modal-sub">Login to manage your listings</div>
+    </div>
+    <div id="login-error"></div>
+    <form id="login-form" onsubmit="submitLogin(event)">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <div class="input-icon">
+          <span class="icon">&#x1f464;</span>
+          <input id="login-username" class="input" type="text" required autocomplete="username">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <div class="input-icon">
+          <span class="icon">&#x1f512;</span>
+          <input id="login-password" class="input" type="password" required autocomplete="current-password" placeholder="Enter password">
+        </div>
+      </div>
+      <button type="submit" id="login-submit" class="btn btn-primary" style="width:100%;padding:1rem">Login</button>
+    </form>
+    <button class="btn-ghost" onclick="hideLoginModal()" style="margin-top:1rem">Cancel</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let currentUser = null;
+let reviewInterval = null;
+let submitSuccess = false;
+
+// ---------------------------------------------------------------------------
+// Routing
+// ---------------------------------------------------------------------------
+function navigate(path) {
+  window.location.hash = path;
+}
+
+window.addEventListener('hashchange', render);
+window.addEventListener('DOMContentLoaded', () => { render(); loadStorefront(); });
+
+function render() {
+  const hash = window.location.hash.replace('#', '') || '/';
+  const pages = document.querySelectorAll('.page');
+  pages.forEach(p => p.classList.remove('active'));
+
+  if (reviewInterval) { clearInterval(reviewInterval); reviewInterval = null; }
+
+  if (hash === '/' || hash === '') {
+    document.getElementById('page-home').classList.add('active');
+    loadStorefront();
+  } else if (hash === '/submit') {
+    document.getElementById('page-submit').classList.add('active');
+    renderSubmitPage();
+  } else if (hash === '/review') {
+    document.getElementById('page-review').classList.add('active');
+    loadReviewQueue();
+    reviewInterval = setInterval(loadReviewQueue, 10000);
+  } else if (hash === '/dashboard') {
+    document.getElementById('page-dashboard').classList.add('active');
+    loadDashboard();
+  } else {
+    navigate('/');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+function showLoginModal() {
+  document.getElementById('login-modal').style.display = 'flex';
+  document.getElementById('login-error').innerHTML = '';
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  setTimeout(() => document.getElementById('login-username').focus(), 50);
+}
+
+function hideLoginModal() {
+  document.getElementById('login-modal').style.display = 'none';
+}
+
+async function submitLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="sm-spinner"></span> Logging in...';
+  document.getElementById('login-error').innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('username', document.getElementById('login-username').value);
+  fd.append('password', document.getElementById('login-password').value);
+
+  try {
+    const res = await fetch('/api/login', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Invalid username or password');
+    currentUser = { id: data.id, username: data.username, is_admin: data.is_admin, is_banned: data.is_banned };
+    hideLoginModal();
+    updateNavUser();
+    if (currentUser.is_admin) navigate('/review');
+    else navigate('/submit');
+  } catch (err) {
+    document.getElementById('login-error').innerHTML =
+      `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Login';
+  }
+}
+
+function logout() {
+  currentUser = null;
+  updateNavUser();
+  navigate('/');
+}
+
+function updateNavUser() {
+  const area = document.getElementById('nav-user-area');
+  const loginBtn = document.getElementById('nav-login-btn');
+  const logoutBtn = document.getElementById('nav-logout-btn');
+
+  if (!currentUser) {
+    area.innerHTML = '';
+    loginBtn.style.display = '';
+    logoutBtn.style.display = 'none';
+    return;
+  }
+
+  loginBtn.style.display = 'none';
+  logoutBtn.style.display = '';
+
+  const isAdmin = currentUser.is_admin;
+  const dashLink = !isAdmin
+    ? `<button class="nav-link" onclick="navigate('/dashboard')">&#x1f4ca; My Listings</button>`
+    : '';
+
+  area.innerHTML = `
+    ${dashLink}
+    <div class="user-chip ${isAdmin ? 'admin' : 'seller'}">
+      <span>&#x1f464;</span>
+      <span style="font-size:.85rem;font-weight:600;color:${isAdmin ? '#92400e' : 'var(--c-primary-dark)'}">${esc(currentUser.username)}</span>
+      <span class="role-badge ${isAdmin ? 'admin' : 'seller'}">${isAdmin ? 'Mod' : 'Seller'}</span>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Storefront
+// ---------------------------------------------------------------------------
+async function loadStorefront() {
+  const el = document.getElementById('storefront-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading listings...</p></div>';
+  try {
+    const res = await fetch('/api/listings');
+    if (!res.ok) throw new Error('Failed to load listings');
+    const data = await res.json();
+    renderStorefront(data.listings || []);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderStorefront(listings) {
+  const el = document.getElementById('storefront-content');
+  if (listings.length === 0) {
+    el.innerHTML = `<div class="card empty"><div class="icon">&#x1f3ea;</div>
+      <h2>No listings yet</h2>
+      <p>Be the first to sell something awesome! Login as a seller to get started.</p></div>`;
+    return;
+  }
+
+  const cards = listings.map((item, i) => `
+    <div class="card listing-card">
+      <div class="listing-img">
+        ${i < 3 ? '<span class="badge-new">NEW</span>' : ''}
+        ${item.image_url
+          ? `<img src="${esc(item.image_url)}" alt="${esc(item.title)}" loading="lazy">`
+          : '<span style="font-size:3rem">&#x1f4f7;</span>'}
+      </div>
+      <div class="listing-body">
+        <span class="badge">${esc(item.category || 'Other')}</span>
+        <div class="listing-title">${esc(item.title)}</div>
+        <div class="listing-desc">${esc(item.description)}</div>
+        <div class="listing-footer">
+          <span class="listing-price">$${Number(item.price).toFixed(2)}</span>
+          <span style="color:var(--c-gray);font-size:.85rem">${fmtDate(item.created_at)}</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>Latest Listings</h2>
+      <span style="color:var(--c-gray);font-size:.9rem">${listings.length} ${listings.length === 1 ? 'item' : 'items'}</span>
+    </div>
+    <div class="grid grid-auto">${cards}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Submit Form
+// ---------------------------------------------------------------------------
+let selectedFiles = [];
+
+function renderSubmitPage() {
+  const el = document.getElementById('submit-content');
+  if (!currentUser) {
+    el.innerHTML = `<div class="card empty">
+      <div class="icon">&#x1f3ea;</div>
+      <h2>Want to sell something?</h2>
+      <p>Login to submit your listing and reach buyers in our community.</p>
+      <button class="btn btn-primary" style="margin-top:1.5rem" onclick="showLoginModal()">&#x1f510; Login</button>
+    </div>`;
+    return;
+  }
+
+  if (submitSuccess) {
+    el.innerHTML = `<div class="success-box">
+      <div class="icon">&#x2705;</div>
+      <h3>Listing Submitted!</h3>
+      <p>It will appear in the store once approved.</p>
+      <div style="display:flex;gap:1rem;justify-content:center">
+        <button class="btn btn-primary" onclick="resetSubmit()">&#x1f4dd; Submit Another</button>
+        <button class="btn btn-outline" onclick="logout()">&#x1f6aa; Logout</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <form class="card" style="padding:2.5rem" id="submit-form" onsubmit="submitListing(event)">
+      <div id="submit-error"></div>
+      <div class="form-group">
+        <label>&#x1f4dd; Title</label>
+        <input class="input" type="text" name="title" required placeholder="What are you selling?">
+      </div>
+      <div class="form-group">
+        <label>&#x1f3f7;&#xfe0f; Category</label>
+        <select class="input" name="category" required>
+          <option value="">Select a category...</option>
+          <option>Electronics</option><option>Clothing</option>
+          <option>Home</option><option>Vehicles</option>
+          <option>Services</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>&#x1f4c4; Description</label>
+        <textarea class="input" name="description" required rows="5" placeholder="Describe your item in detail..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>&#x1f4b0; Price ($)</label>
+        <input class="input" type="number" name="price" step="0.01" min="0" required placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label>&#x1f4f8; Images</label>
+        <div class="upload-zone" id="upload-zone"
+          ondragover="dropOver(event)" ondragleave="dropLeave(event)" ondrop="dropFiles(event)"
+          onclick="document.getElementById('file-input').click()">
+          <div class="icon">&#x1f4e4;</div>
+          <p>Drag &amp; drop JPG, JPEG, or PNG images here or click to browse</p>
+          <span style="display:inline-block;padding:.625rem 1.25rem;background:var(--c-light);
+                       color:var(--c-dark);border-radius:8px;font-size:.9rem;font-weight:600">Choose Files</span>
+          <input type="file" id="file-input" accept=".jpg,.jpeg,.png" multiple style="display:none"
+            onchange="handleFileInput(this.files)">
+        </div>
+        <div id="file-status" style="margin-top:.75rem"></div>
+      </div>
+      <div style="display:flex;gap:1rem">
+        <button type="submit" id="submit-btn" class="btn btn-primary" style="flex:1;padding:1rem">&#x1f680; Submit Listing</button>
+        <button type="button" class="btn btn-outline" style="padding:1rem 1.75rem" onclick="logout()">&#x1f6aa; Logout</button>
+      </div>
+    </form>`;
+  selectedFiles = [];
+}
+
+function resetSubmit() { submitSuccess = false; renderSubmitPage(); }
+
+const ALLOWED = ['image/jpeg', 'image/png'];
+const ALLOWED_EXT = ['.jpg', '.jpeg', '.png'];
+
+function filterFiles(files) {
+  const valid = [], rejected = [];
+  for (const f of files) {
+    const ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+    (ALLOWED.includes(f.type) || ALLOWED_EXT.includes(ext)) ? valid.push(f) : rejected.push(f.name);
+  }
+  return { valid, rejected };
+}
+
+function handleFileInput(files) {
+  const { valid, rejected } = filterFiles(Array.from(files));
+  selectedFiles = valid;
+  const status = document.getElementById('file-status');
+  if (rejected.length) {
+    status.innerHTML = `<div class="alert alert-error">Rejected: ${rejected.map(esc).join(', ')}. Only JPG, JPEG, PNG allowed.</div>`;
+  }
+  if (valid.length) {
+    status.innerHTML = `<p style="color:var(--c-success);font-weight:600">&#x2705; ${valid.length} image(s) selected</p>`;
+  }
+}
+
+function dropOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('drag'); }
+function dropLeave(e) { e.preventDefault(); document.getElementById('upload-zone').classList.remove('drag'); }
+function dropFiles(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  handleFileInput(e.dataTransfer.files);
+}
+
+async function submitListing(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('submit-error');
+  errEl.innerHTML = '';
+
+  if (!selectedFiles.length) {
+    errEl.innerHTML = '<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> Please select at least one image (JPG, JPEG, or PNG)</div>';
+    return;
+  }
+
+  const form = e.target;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="sm-spinner"></span> Submitting...';
+
+  const fd = new FormData();
+  fd.append('user_id', currentUser.username);
+  fd.append('title', form.title.value);
+  fd.append('category', form.category.value);
+  fd.append('description', form.description.value);
+  fd.append('price', form.price.value);
+  selectedFiles.forEach(f => fd.append('images', f));
+
+  try {
+    const res = await fetch('/api/submit', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Submission failed');
+    submitSuccess = true;
+    renderSubmitPage();
+  } catch (err) {
+    errEl.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = '&#x1f680; Submit Listing';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Review Queue
+// ---------------------------------------------------------------------------
+async function loadReviewQueue() {
+  const el = document.getElementById('review-content');
+
+  if (!currentUser) {
+    el.innerHTML = `<div class="card empty"><h2>Access Denied</h2><p>Please login as a moderator.</p></div>`;
+    return;
+  }
+  if (!currentUser.is_admin) {
+    el.innerHTML = `<div class="card empty"><h2>Access Denied</h2><p>This area is for moderators only.</p></div>`;
+    return;
+  }
+
+  if (!el.innerHTML) {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading queue...</p></div>';
+  }
+
+  try {
+    const [qRes, sRes] = await Promise.all([fetch('/api/review-queue'), fetch('/api/stats')]);
+    const queue = qRes.ok ? await qRes.json() : { items: [] };
+    const stats = sRes.ok ? await sRes.json() : null;
+    renderReviewQueue(queue.items || [], stats);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderReviewQueue(items, stats) {
+  const el = document.getElementById('review-content');
+
+  const statsHtml = stats ? `
+    <div class="grid grid-3" style="margin-bottom:2rem">
+      ${statCard('Total Moderated', stats.total_moderated, '#4a90e2')}
+      ${statCard('Auto Approved', stats.auto_approved, '#27ae60')}
+      ${statCard('Auto Rejected', stats.auto_rejected, 'var(--c-danger)')}
+      ${statCard('Sent to Review', stats.sent_to_review, 'var(--c-warning)')}
+      ${statCard('Queue Depth', stats.queue_depth, '#9b59b6')}
+      ${statCard('Avg Latency', (stats.avg_latency_seconds || 0) + 's', '#34495e')}
+    </div>` : '';
+
+  const queueHtml = items.length === 0
+    ? `<div class="card" style="text-align:center;padding:3rem"><p style="color:#27ae60;font-size:1.2rem">No items in review queue. All caught up!</p></div>`
+    : `<div class="grid grid-auto">${items.map(reviewCard).join('')}</div>`;
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>Moderation Queue (${items.length} pending)</h2>
+      <button class="btn btn-primary btn-sm" onclick="loadReviewQueue()">Refresh</button>
+    </div>
+    ${statsHtml}
+    ${queueHtml}`;
+}
+
+function statCard(title, value, color) {
+  return `<div class="stat-card"><div class="stat-value" style="color:${color}">${esc(String(value))}</div><div class="stat-label">${esc(title)}</div></div>`;
+}
+
+function reviewCard(item) {
+  const p = item.priority || 'medium';
+  const dec = item.ai_decision || 'REVIEW';
+  const decClass = dec === 'APPROVE' ? 'ai-approve' : dec === 'REJECT' ? 'ai-reject' : 'ai-review';
+  const conf = item.ai_confidence != null ? `(${(item.ai_confidence * 100).toFixed(0)}%)` : '';
+  const reasons = (item.ai_reasons || []).join(', ') || 'No issues flagged';
+  return `
+    <div class="card" style="border-radius:16px;overflow:hidden">
+      <div style="height:200px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        ${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.title)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="color:#ccc;font-size:3rem">No Image</span>'}
+      </div>
+      <div style="padding:1.25rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+          <span class="badge">${esc(item.category || 'Other')}</span>
+          <span style="font-size:.8rem;color:#999">by ${esc(item.submitter || 'unknown')}</span>
+        </div>
+        <h3 style="margin:0 0 .5rem;font-size:1.1rem;color:#333">${esc(item.title)}</h3>
+        <p style="color:#666;font-size:.9rem;line-height:1.4;margin:0 0 .75rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(item.description)}</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <span style="font-size:1.25rem;font-weight:700;color:var(--c-primary)">$${esc(String(item.price))}</span>
+          <span class="priority-badge priority-${p}">${p} Priority</span>
+        </div>
+        <div class="ai-box">
+          <p style="margin:0 0 .25rem;font-weight:500">AI: <span class="${decClass}" style="font-weight:700">${dec}</span> <span style="color:#666">${conf}</span></p>
+          <p style="margin:0;color:#666;font-size:.8rem">${esc(reasons)}</p>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-success btn-sm" style="flex:1" onclick="reviewAction('${esc(item.listing_id)}','publish')">&#x2705; Publish</button>
+          <button class="btn btn-danger btn-sm" style="flex:1" onclick="reviewAction('${esc(item.listing_id)}','ban')">&#x274c; Ban</button>
+        </div>
+        <div class="action-row2">
+          <button class="btn btn-sm" style="flex:1;background:#fee2e2;color:#dc2626;border:2px solid #fca5a5" onclick="deleteListing('${esc(item.listing_id)}','${esc(item.title)}')">&#x1f5d1;&#xfe0f; Delete</button>
+          <button class="btn btn-sm" style="flex:1;background:#fef3c7;color:#92400e;border:2px solid #fbbf24" onclick="blockUser('${esc(item.submitter)}')">&#x1f6ab; Block User</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function reviewAction(listingId, action) {
+  const fd = new FormData();
+  fd.append('action', action);
+  fd.append('moderator', currentUser.username);
+  try {
+    const res = await fetch(`/api/review/${listingId}`, { method: 'POST', body: fd });
+    if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
+    await loadReviewQueue();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+async function blockUser(username) {
+  if (!confirm(`Block user "${username}"? They will no longer be able to submit listings.`)) return;
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  try {
+    const res = await fetch(`/api/ban-user/${encodeURIComponent(username)}`, { method: 'POST', body: fd });
+    if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
+    alert(`User "${username}" has been blocked.`);
+    await loadReviewQueue();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+async function deleteListing(listingId, title) {
+  if (!confirm(`Delete listing "${title}" permanently? This cannot be undone.`)) return;
+  const fd = new FormData();
+  fd.append('username', currentUser.username);
+  try {
+    const res = await fetch(`/api/listings/${listingId}`, { method: 'DELETE', body: fd });
+    if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
+    await loadReviewQueue();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+let editingId = null;
+
+async function loadDashboard() {
+  const el = document.getElementById('dashboard-content');
+  if (!currentUser) {
+    el.innerHTML = `<div class="card empty"><div class="icon">&#x1f464;</div><h2>My Listings</h2><p>Please login to view your listings.</p></div>`;
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading...</p></div>';
+  try {
+    const res = await fetch(`/api/my-listings?user_id=${encodeURIComponent(currentUser.username)}`);
+    if (!res.ok) throw new Error('Failed to load dashboard');
+    const data = await res.json();
+    renderDashboard(data.listings || [], data.is_banned || false);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderDashboard(listings, isBanned) {
+  const el = document.getElementById('dashboard-content');
+  const bannedBanner = isBanned ? `
+    <div style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:1.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:1rem">
+      <span style="font-size:2rem">&#x1f6ab;</span>
+      <div>
+        <p style="margin:0;font-weight:700;color:var(--c-danger);font-size:1.1rem">Account Suspended</p>
+        <p style="margin:.25rem 0 0;color:#991b1b;font-size:.9rem">Your account has been blocked by a moderator. You cannot submit new listings or edit existing ones.</p>
+      </div>
+    </div>` : '';
+
+  if (listings.length === 0) {
+    el.innerHTML = bannedBanner + `<div class="card empty"><div class="icon">&#x1f4ed;</div><p style="color:var(--c-gray);font-size:1.1rem">No listings yet. Submit your first item!</p></div>`;
+    return;
+  }
+
+  el.innerHTML = bannedBanner + `<div class="grid grid-auto">${listings.map(item => dashCard(item, isBanned)).join('')}</div>`;
+  editingId = null;
+}
+
+function dashCard(item, isBanned) {
+  const isPublished = item.status === 'published' && item.is_published;
+  const isRejected = item.status === 'rejected';
+  const statusCls = isPublished ? 'status-approved' : isRejected ? 'status-rejected' : 'status-pending';
+  const statusTxt = isPublished ? 'Approved &#x2705;' : isRejected ? 'Rejected &#x274c;' : 'Pending &#x23f3;';
+
+  const rejectedAI = isRejected && item.ai_reasons && item.ai_reasons[0] !== 'none'
+    ? `<div style="background:#fef2f2;padding:.75rem;border-radius:8px;margin-bottom:.75rem;font-size:.85rem"><p style="margin:0;color:#991b1b;font-weight:600">&#x26a0;&#xfe0f; ${esc((item.ai_reasons || []).join(', '))}</p></div>` : '';
+
+  const actions = isRejected && !isBanned
+    ? `<button class="btn btn-sm" style="background:var(--c-warning);color:#fff;border:none;flex:1;min-width:120px;font-weight:700" onclick="startEdit('${item.id}','${esc(item.title)}','${esc(item.category||'Other')}','${esc(item.description)}','${item.price}')">&#x1f4dd; Edit &amp; Resubmit</button>`
+    : isRejected && isBanned
+      ? `<button disabled class="btn btn-sm" style="background:#e5e7eb;color:#9ca3af;border:none;flex:1;min-width:120px;cursor:not-allowed">&#x1f512; Blocked</button>` : '';
+
+  return `
+    <div class="card" style="border-radius:16px;overflow:hidden" id="dash-card-${item.id}">
+      <div style="height:200px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);display:flex;align-items:center;justify-content:center;overflow:hidden">
+        ${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.title)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="color:#ccc;font-size:3rem">&#x1f4f7;</span>'}
+      </div>
+      <div style="padding:1.25rem">
+        <span class="status-badge ${statusCls}">${statusTxt}</span>
+        <span class="badge" style="margin-left:.5rem">${esc(item.category || 'Other')}</span>
+        <h3 style="margin:.5rem 0;font-size:1.1rem;font-weight:700;color:var(--c-dark)">${esc(item.title)}</h3>
+        <p style="color:var(--c-gray);font-size:.9rem;line-height:1.4;margin:0 0 .75rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(item.description)}</p>
+        <p style="font-size:1.25rem;font-weight:800;color:var(--c-primary);margin:0 0 .75rem">$${Number(item.price).toFixed(2)}</p>
+        ${rejectedAI}
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          ${actions}
+          <button class="btn btn-danger btn-sm" style="flex:1;min-width:80px;font-weight:700" onclick="deleteMyListing('${item.id}')">&#x1f5d1;&#xfe0f; Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function startEdit(id, title, category, description, price) {
+  const card = document.getElementById(`dash-card-${id}`);
+  if (!card) return;
+  editingId = id;
+  const body = card.querySelector('div[style*="padding:1.25rem"]');
+  body.innerHTML = `
+    <div class="form-group"><label>Title</label><input class="input" id="edit-title" value="${esc(title)}"></div>
+    <div class="form-group"><label>Category</label>
+      <select class="input" id="edit-category">
+        ${['Electronics','Clothing','Home','Vehicles','Services','Other'].map(c => `<option ${c===category?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Description</label><textarea class="input" id="edit-desc" rows="3">${esc(description)}</textarea></div>
+    <div class="form-group"><label>Price</label><input class="input" type="number" step="0.01" id="edit-price" value="${price}"></div>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveEdit('${id}')">&#x1f4be; Save</button>
+      <button class="btn btn-sm" style="flex:1;background:var(--c-light);color:var(--c-gray);border:none" onclick="loadDashboard()">Cancel</button>
+    </div>`;
+}
+
+async function saveEdit(listingId) {
+  const fd = new FormData();
+  fd.append('user_id', currentUser.username);
+  fd.append('title', document.getElementById('edit-title').value);
+  fd.append('category', document.getElementById('edit-category').value);
+  fd.append('description', document.getElementById('edit-desc').value);
+  fd.append('price', document.getElementById('edit-price').value);
+  try {
+    const res = await fetch(`/api/listings/${listingId}`, { method: 'PUT', body: fd });
+    if (!res.ok) throw new Error('Update failed');
+    await loadDashboard();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+async function deleteMyListing(listingId) {
+  if (!confirm('Delete this listing permanently? This cannot be undone.')) return;
+  const fd = new FormData();
+  fd.append('username', currentUser.username);
+  try {
+    const res = await fetch(`/api/listings/${listingId}`, { method: 'DELETE', body: fd });
+    if (!res.ok) throw new Error('Delete failed');
+    await loadDashboard();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+  catch { return ''; }
+}
+</script>
+</body>
+</html>

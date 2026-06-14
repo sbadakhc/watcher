@@ -603,12 +603,6 @@ async def get_image(image_id: str, width: Optional[int] = Query(None)):
 # ---------------------------------------------------------------------------
 
 
-from fastapi.staticfiles import StaticFiles
-
-# Mount static assets (JS, CSS, etc.)
-app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-
-
 @app.get("/")
 async def serve_index():
     return FileResponse("static/index.html")

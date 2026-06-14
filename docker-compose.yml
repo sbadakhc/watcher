@@ -45,7 +45,7 @@ services:
       - DB_USER=watcher
       - DB_PASSWORD_FILE=/run/secrets/watcher-db-password
       - TEXT_MODEL=${TEXT_MODEL:-qwen2.5:7b}
-      - VISION_MODEL=${VISION_MODEL:-qwen2.5VL:3B}
+      - VISION_MODEL=${VISION_MODEL:-qwen2.5vl:3b}
       - AUTO_APPROVE_THRESHOLD=${AUTO_APPROVE_THRESHOLD:-0.95}
       - REVIEW_THRESHOLD=${REVIEW_THRESHOLD:-0.70}
       - PORT=9104

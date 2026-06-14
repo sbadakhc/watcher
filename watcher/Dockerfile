@@ -1,14 +1,4 @@
-# --- Stage 1: Build React frontend ---
-FROM node:20-alpine AS ui-builder
-
-WORKDIR /ui
-COPY ui/package.json ui/package-lock.json ui/.npmrc ./
-RUN npm ci --ignore-scripts --prefer-offline
-
-COPY ui/ .
-RUN npm run build
-
-# --- Stage 2: Build Python dependencies ---
+# --- Stage 1: Build Python dependencies ---
 FROM python:3.12-slim AS py-builder
 
 RUN apt-get update \
@@ -19,7 +9,7 @@ WORKDIR /app
 COPY watcher/requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# --- Stage 3: Runtime ---
+# --- Stage 2: Runtime ---
 FROM python:3.12-slim
 
 RUN apt-get update \
@@ -34,8 +24,8 @@ COPY --from=py-builder /install /usr/local
 # Copy backend code
 COPY watcher/*.py .
 
-# Copy built frontend
-COPY --from=ui-builder /ui/dist static
+# Copy static UI (plain HTML/JS — no build step, no npm)
+COPY watcher/static static
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fs http://localhost:9104/api/health | grep -q ok || exit 1
