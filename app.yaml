@@ -1,0 +1,69 @@
+# AIXCL Application Manifest — Watcher
+# AI-powered marketplace listing moderation
+# Fully integrated with AIXCL platform services
+
+app:
+  name: "watcher"
+  version: "0.2.0"
+  description: "AI-powered marketplace listing moderation with human-in-the-loop review"
+  repository: "https://github.com/sbadakhc/watcher"
+  builder: "xencon"
+
+# Platform resources provisioned automatically on app start (idempotent).
+# Secrets live in Vault KV at kv/apps/watcher and are rendered into the
+# per-app volume aixcl-app-watcher-secrets as /run/secrets/watcher-<name>.
+provision:
+  secrets:
+    - db-password
+    - auth-password
+    - user-password
+    - admin-password
+  postgres:
+    database: watcher
+    owner: watcher
+    password_secret: db-password
+
+services:
+  - name: "watcher-redis"
+    container_name: "watcher-redis"
+    image: "redis:7-alpine"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      type: cmd
+      command: "redis-cli ping"
+      startup_timeout: 30
+      interval: 10
+
+  - name: "watcher-moderation"
+    container_name: "watcher-moderation"
+    image: "localhost/watcher-moderation:latest"
+    built: true
+    build:
+      context: "."
+      dockerfile: "watcher/Dockerfile"
+    ports:
+      - "9104:9104"
+
+    depends_on:
+      - watcher-redis
+
+    healthcheck:
+      type: http
+      url: "http://127.0.0.1:9104/api/health"
+      startup_timeout: 120
+      interval: 10
+      max_retries: 3
+
+prometheus:
+  enabled: true
+  metrics_path: "/api/metrics"
+  targets:
+    - "localhost:9104"
+  labels:
+    app: "watcher"
+
+grafana:
+  enabled: true
+  dashboards:
+    - "grafana/dashboards/watcher-moderation.json"

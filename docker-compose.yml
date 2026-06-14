@@ -1,0 +1,77 @@
+# Watcher Application Docker Compose
+# AI-powered marketplace listing moderation
+# Fully integrated with AIXCL platform services
+#
+# IMPORTANT: All services use network_mode: host (AIXCL invariant).
+# Paths are relative to apps/watcher/.
+#
+# NOTE: Uses a dedicated PostgreSQL database named `watcher`, not the
+# platform `webui` database, to avoid polluting the core runtime.
+#
+# Secrets: provisioned by the platform from the `provision:` section of
+# app.yaml on `./aixcl app start watcher`. They are rendered into the
+# per-app volume aixcl-app-watcher-secrets; this app never mounts the
+# shared platform secrets volume and never holds a Vault token.
+
+services:
+  watcher-redis:
+    image: redis:7-alpine
+    container_name: watcher-redis
+    network_mode: host
+    # Run directly as the redis user. The image entrypoint then skips its
+    # root-only chown phase, which fails (and crash-loops) under cap_drop ALL.
+    user: "999:999"
+    volumes:
+      - watcher-redis-data:/data
+    command: redis-server --appendonly yes --appendfsync everysec --bind 127.0.0.1
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  watcher-moderation:
+    image: localhost/watcher-moderation:latest
+    container_name: watcher-moderation
+    pull_policy: missing
+    build:
+      context: .
+      dockerfile: watcher/Dockerfile
+    environment:
+      - OLLAMA_URL=http://localhost:11434
+      - DB_HOST=localhost
+      - DB_PORT=5432
+      - DB_NAME=watcher
+      - DB_USER=watcher
+      - DB_PASSWORD_FILE=/run/secrets/watcher-db-password
+      - TEXT_MODEL=${TEXT_MODEL:-qwen2.5:7b}
+      - VISION_MODEL=${VISION_MODEL:-qwen2.5VL:3B}
+      - AUTO_APPROVE_THRESHOLD=${AUTO_APPROVE_THRESHOLD:-0.95}
+      - REVIEW_THRESHOLD=${REVIEW_THRESHOLD:-0.70}
+      - PORT=9104
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - watcher-secrets:/run/secrets:ro
+    network_mode: host
+    restart: unless-stopped
+    cpus: '2.0'
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - watcher-redis
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fs http://localhost:9104/api/health | grep -q ok
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  watcher-secrets:
+    name: aixcl-app-watcher-secrets
+    external: true
+  watcher-redis-data:
