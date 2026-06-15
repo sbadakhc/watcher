@@ -24,17 +24,6 @@ provision:
     password_secret: db-password
 
 services:
-  - name: "watcher-redis"
-    container_name: "watcher-redis"
-    image: "redis:7-alpine"
-    ports:
-      - "6379:6379"
-    healthcheck:
-      type: cmd
-      command: "redis-cli ping"
-      startup_timeout: 30
-      interval: 10
-
   - name: "watcher-moderation"
     container_name: "watcher-moderation"
     image: "localhost/watcher-moderation:latest"
@@ -44,9 +33,6 @@ services:
       dockerfile: "watcher/Dockerfile"
     ports:
       - "9104:9104"
-
-    depends_on:
-      - watcher-redis
 
     healthcheck:
       type: http

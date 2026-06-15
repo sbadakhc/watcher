@@ -6,7 +6,7 @@
 # Paths are relative to apps/watcher/.
 #
 # NOTE: Uses a dedicated PostgreSQL database named `watcher`, not the
-# platform `webui` database, to avoid polluting the core runtime.
+# platform `aixcl` database, to avoid polluting the core runtime.
 #
 # Secrets: provisioned by the platform from the `provision:` section of
 # app.yaml on `./aixcl app start watcher`. They are rendered into the
@@ -14,22 +14,6 @@
 # shared platform secrets volume and never holds a Vault token.
 
 services:
-  watcher-redis:
-    image: redis:7-alpine
-    container_name: watcher-redis
-    network_mode: host
-    # Run directly as the redis user. The image entrypoint then skips its
-    # root-only chown phase, which fails (and crash-loops) under cap_drop ALL.
-    user: "999:999"
-    volumes:
-      - watcher-redis-data:/data
-    command: redis-server --appendonly yes --appendfsync everysec --bind 127.0.0.1
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
   watcher-moderation:
     image: localhost/watcher-moderation:latest
     container_name: watcher-moderation
@@ -46,8 +30,10 @@ services:
       - DB_PASSWORD_FILE=/run/secrets/watcher-db-password
       - TEXT_MODEL=${TEXT_MODEL:-qwen2.5:7b}
       - VISION_MODEL=${VISION_MODEL:-qwen2.5vl:3b}
-      - AUTO_APPROVE_THRESHOLD=${AUTO_APPROVE_THRESHOLD:-0.95}
-      - REVIEW_THRESHOLD=${REVIEW_THRESHOLD:-0.70}
+      - VISION_TIMEOUT=${VISION_TIMEOUT:-360}
+      - AUTO_APPROVE_CONFIDENCE=${AUTO_APPROVE_CONFIDENCE:-0.85}
+      - AUTO_APPROVE_RISK_MAX=${AUTO_APPROVE_RISK_MAX:-30}
+      - AUTO_REJECT_CONFIDENCE=${AUTO_REJECT_CONFIDENCE:-0.80}
       - PORT=9104
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
@@ -59,8 +45,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    depends_on:
-      - watcher-redis
     healthcheck:
       test:
         - CMD-SHELL
@@ -74,4 +58,3 @@ volumes:
   watcher-secrets:
     name: aixcl-app-watcher-secrets
     external: true
-  watcher-redis-data:

@@ -4,12 +4,15 @@ AI-assisted listing moderation for e-commerce platforms. Built for the AIXCL BYO
 
 ## Overview
 
-Watcher provides a two-stage AI moderation pipeline for marketplace listings:
+Watcher provides a three-outcome AI moderation pipeline for marketplace listings:
 
-1. **Text moderation** via Ollama (Qwen2.5 7B)
-2. **Image moderation** via vision model (Qwen2.5-VL 3B) + text classifier
+1. **Text moderation** via Ollama (configurable, default `qwen2.5:7b`)
+2. **Image analysis** via vision model (configurable, default `qwen2.5vl:3b`)
+3. **Threshold routing** -- auto-approve, auto-reject, or human review queue
 
-Decisions are stored in PostgreSQL. Uncertain listings enter a human review queue.
+Confident approvals publish immediately. Confident violations are auto-rejected and
+the seller's violation count is incremented. Only genuinely ambiguous listings reach
+the human review queue.
 
 ## Architecture
 
@@ -17,39 +20,31 @@ Decisions are stored in PostgreSQL. Uncertain listings enter a human review queu
 User submits listing
         |
         v
+POST /api/submit  (returns immediately)
+        |
+        v (background task)
 +--------------------------------------+
-|  Watcher Moderation Service          |
-|  FastAPI + React (port 9104)        |
+|  Moderation Pipeline                 |
 |                                      |
-|  /api/submit    → Text + Image      |
-|  /api/review    → Human queue       |
-|  /              → React SPA         |
+|  1. Image analysis (vision model)    |
+|  2. Text + image combined classify   |
+|  3. Threshold routing                |
 +--------------------------------------+
         |
    +----+----+
-   |         |
-   v         v
-Text       Image
-(Qwen2.5 7B) (Qwen2.5-VL 3B)
-   |         |
-   +----+----+
-        |
-   +----+----+
-   |         |
-   v         v
-APPROVE   REVIEW/REJECT
-(auto)    (human review)
+   |    |    |
+   v    v    v
+AUTO  HUMAN  AUTO
+APPROVE REVIEW REJECT
+(published)  (queue) (rejected)
 ```
 
 ## Platform Integration
 
-Watcher is fully integrated with AIXCL platform services:
-
 | Service | Integration |
 |---------|-------------|
-| **PostgreSQL** | Shared platform instance (`aixcl` DB, `watcher` schema) |
-| **Vault** | Secrets via `/run/secrets` (database password, auth credentials) |
-| **Redis** | Dedicated `watcher-redis` container for Medusa event bus |
+| **PostgreSQL** | Dedicated `watcher` database, `watcher` schema |
+| **Vault** | Secrets via `/run/secrets` (db password, auth credentials) |
 | **Ollama** | `localhost:11434` via host networking |
 | **Prometheus** | Metrics on `:9104/api/metrics` |
 | **Grafana** | Dashboard at `grafana/dashboards/watcher-moderation.json` |
@@ -57,36 +52,26 @@ Watcher is fully integrated with AIXCL platform services:
 ## File Structure
 
 ```
-apps/watcher/
-├── app.yaml                          # AIXCL manifest
-├── docker-compose.yml                # Watcher + Redis services
-├── README.md                         # This file
-├── grafana/
-│   └── dashboards/
-│       └── watcher-moderation.json   # Grafana dashboard
-├── ui/                               # React frontend (Vite)
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── index.html
-│   └── src/
-│       ├── main.jsx
-│       ├── App.jsx
-│       ├── components/
-│       │   ├── SubmitForm.jsx
-│       │   ├── ReviewQueue.jsx
-│       │   ├── StatsPanel.jsx
-│       │   └── LoginModal.jsx
-│       └── api/
-│           └── client.js
-└── watcher/                          # FastAPI backend
-    ├── Dockerfile                    # Multi-stage (UI + Python build)
-    ├── requirements.txt
-    ├── config.py                     # Settings from env/Vault
-    ├── auth.py                       # Password hashing + basic auth
-    ├── db.py                         # PostgreSQL schema + CRUD
-    ├── models.py                     # Pydantic models
-    ├── moderation.py                 # LLM pipeline
-    └── main.py                       # FastAPI app + routes
+watcher/
++-- app.yaml                          # AIXCL manifest
++-- docker-compose.yml                # Watcher service
++-- README.md                         # This file
++-- grafana/
+|   +-- dashboards/
+|       +-- watcher-moderation.json   # Grafana dashboard
++-- scripts/
+|   +-- seed.py                       # Demo data seeder
++-- watcher/                          # FastAPI backend + frontend
+    +-- Dockerfile
+    +-- requirements.txt
+    +-- config.py                     # Settings from env/Vault
+    +-- auth.py                       # Password hashing + basic auth
+    +-- db.py                         # PostgreSQL schema + CRUD
+    +-- models.py                     # Pydantic models
+    +-- moderation.py                 # LLM pipeline + threshold logic
+    +-- main.py                       # FastAPI app + routes
+    +-- static/
+        +-- index.html                # Vanilla JS SPA (storefront, submit, review, dashboard)
 ```
 
 ## Quick Start
@@ -95,10 +80,10 @@ apps/watcher/
 
 - AIXCL platform running (`./aixcl stack start --profile sys`)
 - Vault initialized and unsealed
-- Models pulled in Ollama (names are case-sensitive, match `ollama list`):
+- Models pulled in Ollama (names are case-sensitive; must match `ollama list` output exactly):
   ```bash
-  ollama pull qwen2.5:7b      # text moderation (TEXT_MODEL)
-  ollama pull qwen2.5VL:3B    # image analysis (VISION_MODEL)
+  ollama pull qwen2.5:7b
+  ollama pull qwen2.5vl:3b
   ```
 
 ### 1. Build and Start
@@ -109,42 +94,51 @@ apps/watcher/
 ./aixcl app start watcher
 ```
 
-No manual secret or database setup is required. The `provision:` section
-of `app.yaml` declares what Watcher needs; on every start the platform
-idempotently:
+No manual secret or database setup is required. The `provision:` section of `app.yaml`
+declares what Watcher needs; on every start the platform idempotently:
 
-- generates the secrets in Vault KV (`kv/apps/watcher`)
+- generates secrets in Vault KV (`kv/apps/watcher`)
 - renders them into the per-app volume `aixcl-app-watcher-secrets`
   (`/run/secrets/watcher-<name>` inside the container)
 - creates the `watcher` PostgreSQL role and database
 
-To see the generated credentials (the seeded `user` and `admin` UI
-accounts use `user-password` and `admin-password`):
+To see the generated credentials:
 
 ```bash
 ./aixcl app secrets watcher
 ```
 
+The seeded `user` and `admin` UI accounts use `watcher-user-password` and
+`watcher-admin-password` respectively.
+
 ### 2. Access the UI
 
-Open browser: http://localhost:9104
+```
+http://localhost:9104
+```
 
-### 3. Submit a Listing
+### 3. Seed Demo Data
 
-Fill the form with:
-- User ID: any string (register first at `/api/register`)
-- Title: "Brand new iPhone 15 Pro Max"
-- Description: "512GB - $200 only! Contact on WhatsApp +1234567890"
-- Price: 200.00
-- Images: optional
+The seed script creates 4 seller accounts with realistic account histories and
+submits 13 listings that exercise all three pipeline outcomes.
+
+```bash
+docker cp scripts/seed.py watcher-moderation:/tmp/seed.py
+docker exec watcher-moderation python3 /tmp/seed.py \
+  --db-password $(cat /run/secrets/watcher-db-password) \
+  --user-password $(cat /run/secrets/watcher-user-password)
+```
+
+Expected outcome: ~7 auto-approved, ~3 auto-rejected, ~3 to human review queue.
 
 ### 4. Review Queue
 
-Navigate to "Review Queue" to see AI-flagged listings. Approve or reject with one click.
+Navigate to the "Review Queue" tab. Listings the LLM could not confidently classify
+appear here for human decision.
 
 ### 5. Check Stats
 
-Navigate to "Stats" for moderation metrics.
+The "Stats" tab shows pipeline throughput, average latency, and queue depth.
 
 ## API Endpoints
 
@@ -152,53 +146,62 @@ Navigate to "Stats" for moderation metrics.
 |----------|--------|------|-------------|
 | `/api/health` | GET | No | Service health |
 | `/api/metrics` | GET | No | Prometheus metrics |
-| `/api/register` | POST | No | User registration |
-| `/api/login` | POST | No | User login |
-| `/api/submit` | POST | No | Submit listing for moderation |
-| `/api/review-queue` | GET | No | List human review queue |
-| `/api/review/{id}` | POST | No | Human moderator action |
+| `/api/login` | POST | No | User login (returns user info) |
+| `/api/submit` | POST | No | Submit listing (async, returns immediately) |
+| `/api/listings` | GET | No | Published listings (storefront) |
+| `/api/listings/{id}` | PUT | No | Edit and resubmit a rejected listing |
+| `/api/listings/{id}` | DELETE | No | Delete a listing (owner or admin) |
+| `/api/my-listings` | GET | No | Seller's own listings with status |
+| `/api/review-queue` | GET | No | Human review queue |
+| `/api/review/{id}` | POST | No | Moderator action (publish/ban/approve/reject) |
+| `/api/ban-user/{username}` | POST | No | Ban a user (admin only) |
+| `/api/images/{id}` | GET | No | Serve listing image (supports ?width=N) |
 | `/api/stats` | GET | No | Moderation statistics |
-| `/api/images/{id}` | GET | No | Serve listing image |
 
 ## Database Schema
 
-All tables in `watcher` schema within the platform `aixcl` database:
+All tables in `watcher` schema within the dedicated `watcher` database:
 
-- `users` — Registered users
-- `listings` — Product listings
-- `listing_images` — Uploaded images (BYTEA)
-- `listing_moderation` — AI moderation decisions
-- `human_review_queue` — Pending human reviews
-- `listing_publish_log` — Audit log
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts (sellers and admins) |
+| `listings` | Product listings with moderation status |
+| `listing_images` | Uploaded images stored as BYTEA |
+| `listing_moderation` | AI decisions with confidence, risk score, latency |
+| `human_review_queue` | Listings awaiting human judgement |
+| `listing_publish_log` | Audit trail for all publish/reject actions |
 
 ## Configuration
 
-| Variable | Default | Source |
-|----------|---------|--------|
-| `OLLAMA_URL` | `http://localhost:11434` | env |
-| `DB_HOST` | `localhost` | env |
-| `DB_PORT` | `5432` | env |
-| `DB_NAME` | `aixcl` | env |
-| `DB_USER` | `watcher` | env |
-| `DB_PASSWORD` | — | Vault `/run/secrets/watcher-db-password` |
-| `AUTH_USERNAME` | `admin` | env |
-| `AUTH_PASSWORD` | — | Vault `/run/secrets/watcher-auth-password` |
-| `TEXT_MODEL` | `qwen3:4b` | env |
-| `VISION_MODEL` | `qwen2.5-vl:3b` | env |
-| `AUTO_APPROVE_THRESHOLD` | `0.95` | env |
-| `REVIEW_THRESHOLD` | `0.70` | env |
-| `PORT` | `9104` | env |
+All thresholds are tunable via environment variables without code changes.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
+| `TEXT_MODEL` | `qwen2.5:7b` | Text moderation model |
+| `VISION_MODEL` | `qwen2.5vl:3b` | Image analysis model |
+| `VISION_TIMEOUT` | `360` | Ollama request timeout in seconds |
+| `AUTO_APPROVE_CONFIDENCE` | `0.85` | Min confidence to auto-approve |
+| `AUTO_APPROVE_RISK_MAX` | `30` | Max risk score to auto-approve |
+| `AUTO_REJECT_CONFIDENCE` | `0.80` | Min confidence to auto-reject |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `watcher` | Database name |
+| `DB_USER` | `watcher` | Database user |
+| `DB_PASSWORD_FILE` | -- | Path to password file (Vault secret) |
+| `AUTH_USERNAME` | `admin` | Basic auth username for review queue |
+| `AUTH_PASSWORD_FILE` | -- | Path to auth password file (Vault secret) |
+| `PORT` | `9104` | Service port |
+| `LOG_LEVEL` | `INFO` | Logging level |
 
 ## Security
 
 | Control | Implementation |
 |---------|---------------|
-| SQL Injection | Parameterized queries (psycopg2) |
-| XSS | React auto-escaping + CSP headers |
-| File Upload | Max 5MB, whitelist MIME types |
-| Rate Limiting | 30 requests/minute per IP |
-| Auth | Basic auth for review queue (optional) |
-| Password Storage | PBKDF2-HMAC-SHA256 |
+| SQL injection | Parameterized queries (psycopg2) |
+| XSS | Content-Security-Policy headers |
+| File upload | Max 5MB, JPEG/PNG whitelist |
+| Password storage | PBKDF2-HMAC-SHA256 (100k iterations) |
 | Container | `cap_drop: [ALL]`, `no-new-privileges:true` |
 | Network | `network_mode: host` (AIXCL invariant) |
 | Secrets | Vault-managed, mounted at `/run/secrets` |
@@ -208,19 +211,20 @@ All tables in `watcher` schema within the platform `aixcl` database:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `watcher_listings_submitted_total` | Counter | Total listings submitted |
-| `watcher_users_registered_total` | Counter | Total users registered |
-| `watcher_decisions_total` | Counter | Decisions by type |
-| `watcher_review_queue_depth` | Gauge | Queue depth |
-| `watcher_moderation_latency_seconds` | Histogram | Moderation latency |
-| `watcher_model_errors_total` | Counter | Model errors by stage |
+| `watcher_decisions_total{decision}` | Counter | Decisions by type (auto_approve/auto_reject/human_review) |
+| `watcher_review_queue_depth` | Gauge | Listings pending human review |
+| `watcher_moderation_latency_seconds` | Histogram | End-to-end moderation latency |
+| `watcher_model_errors_total{stage}` | Counter | Model errors by stage |
 
 ## Hardware Requirements
 
-- **CPU**: 2+ cores
-- **RAM**: 4GB for service + models
-- **VRAM**: 8GB (Qwen2.5 7B ~5GB + Qwen2.5-VL 3B ~3GB)
-- **Storage**: 500MB for images + logs
+| Resource | Minimum |
+|----------|---------|
+| CPU | 2 cores |
+| RAM | 4 GB (service) + model memory |
+| VRAM | 8 GB (qwen2.5:7b ~5 GB + qwen2.5vl:3b ~3 GB) |
+| Storage | 500 MB for images |
 
 ## License
 
-MIT — Same as AIXCL platform.
+MIT -- Same as AIXCL platform.
