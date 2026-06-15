@@ -694,4 +694,111 @@ def delete_listing(listing_id: str, username: str, is_admin: bool = False) -> bo
                 "DELETE FROM watcher.listings WHERE id = %s RETURNING id",
                 (listing_id,),
             )
+
             return cur.fetchone() is not None
+
+
+def unban_user(username: str) -> bool:
+    """Remove a ban from a user account."""
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE watcher.users SET is_banned = FALSE WHERE username = %s RETURNING id",
+                (username,),
+            )
+            return cur.fetchone() is not None
+
+
+def get_all_sellers() -> List[dict]:
+    """Return all non-admin users with listing counts by status."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT u.id, u.username, u.is_banned, u.previous_violation_count, u.created_at,
+                       COUNT(l.id) FILTER (WHERE l.status = 'published') AS published_count,
+                       COUNT(l.id) FILTER (WHERE l.status = 'rejected') AS rejected_count,
+                       COUNT(l.id) FILTER (WHERE l.status = 'pending') AS pending_count,
+                       COUNT(l.id) AS total_listings
+                FROM watcher.users u
+                LEFT JOIN watcher.listings l ON l.user_id = u.id
+                WHERE u.is_admin = FALSE
+                GROUP BY u.id, u.username, u.is_banned, u.previous_violation_count, u.created_at
+                ORDER BY u.created_at ASC
+                """
+            )
+            return cur.fetchall()
+
+
+def get_audit_log(limit: int = 100) -> List[dict]:
+    """Return recent audit log entries from listing_publish_log."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT pl.id, pl.listing_id, pl.action, pl.source, pl.performed_by,
+                       pl.notes, pl.created_at,
+                       li.title, li.category, li.status,
+                       u.username AS seller
+                FROM watcher.listing_publish_log pl
+                LEFT JOIN watcher.listings li ON li.id = pl.listing_id
+                LEFT JOIN watcher.users u ON u.id = li.user_id
+                ORDER BY pl.created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return cur.fetchall()
+
+
+def rollback_listing(listing_id: str, moderator: str, notes: str = "") -> bool:
+    """Re-queue any listing for human review regardless of its current status."""
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.id, l.status, m.final_decision, m.final_confidence, m.text_reasons
+                FROM watcher.listings l
+                LEFT JOIN watcher.listing_moderation m ON m.listing_id = l.id
+                WHERE l.id = %s
+                """,
+                (listing_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return False
+
+            cur.execute(
+                """
+                UPDATE watcher.listings
+                SET status = 'pending', is_published = FALSE, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (listing_id,),
+            )
+
+            cur.execute("DELETE FROM watcher.human_review_queue WHERE listing_id = %s", (listing_id,))
+
+            cur.execute(
+                """
+                INSERT INTO watcher.human_review_queue
+                  (listing_id, status, priority, ai_decision, ai_confidence, ai_reasons)
+                VALUES (%s, 'pending', 'high', %s, %s, %s)
+                """,
+                (
+                    listing_id,
+                    row.get("final_decision") or "REVIEW",
+                    row.get("final_confidence"),
+                    json.dumps(row.get("text_reasons") or []),
+                ),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO watcher.listing_publish_log
+                  (listing_id, action, source, performed_by, notes)
+                VALUES (%s, 'rollback', 'human', %s, %s)
+                """,
+                (listing_id, moderator, notes or "Decision rolled back for re-review"),
+            )
+            return True

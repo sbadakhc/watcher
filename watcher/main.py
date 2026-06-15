@@ -23,14 +23,18 @@ from config import (
     AUTO_APPROVE_RISK_MAX,
     AUTO_REJECT_CONFIDENCE,
     LOG_LEVEL,
+    OLLAMA_URL,
     PORT,
     TEXT_MODEL,
     VISION_MODEL,
+    WEBHOOK_URL,
     validate,
 )
 from db import (
     create_listing,
     enqueue_review,
+    get_all_sellers,
+    get_audit_log,
     get_image_by_id,
     get_published_listings,
     get_review_queue,
@@ -38,11 +42,13 @@ from db import (
     get_user_by_username,
     init_schema,
     review_item,
+    rollback_listing,
     seed_users,
     store_image,
     store_moderation,
+    unban_user,
 )
-from moderation import run_moderation, apply_threshold
+from moderation import run_moderation
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -75,6 +81,76 @@ for _d in ("auto_approve", "auto_reject", "human_review"):
 for _s in ("text", "vision"):
     MODEL_ERRORS.labels(stage=_s)
 
+# DB-backed summary gauges -- survive process restarts by reading from DB.
+TOTAL_MODERATED = Gauge("watcher_total_moderated", "Total listings moderated (DB-backed)")
+TOTAL_PUBLISHED = Gauge("watcher_total_published", "Total listings auto-approved and published (DB-backed)")
+TOTAL_REJECTED = Gauge("watcher_total_rejected", "Total listings auto-rejected (DB-backed)")
+TOTAL_IN_REVIEW = Gauge("watcher_total_sent_to_review", "Total listings sent to human review (DB-backed)")
+AVG_LATENCY_DB = Gauge("watcher_avg_latency_seconds_db", "Average moderation latency in seconds (DB-backed)")
+AUTO_RESOLVE_RATE = Gauge("watcher_auto_resolve_rate", "Percentage of listings auto-resolved without human review (DB-backed)")
+
+
+def _sync_db_stats() -> None:
+    """Refresh DB-backed Prometheus gauges from persistent storage."""
+    try:
+        s = get_stats()
+        TOTAL_MODERATED.set(s["total_moderated"])
+        TOTAL_PUBLISHED.set(s["auto_approved"])
+        TOTAL_REJECTED.set(s["auto_rejected"])
+        TOTAL_IN_REVIEW.set(s["sent_to_review"])
+        QUEUE_DEPTH.set(s["queue_depth"])
+        if s["avg_latency_seconds"] is not None:
+            AVG_LATENCY_DB.set(s["avg_latency_seconds"])
+        if s["total_moderated"] > 0:
+            AUTO_RESOLVE_RATE.set(
+                round((s["auto_approved"] + s["auto_rejected"]) / s["total_moderated"] * 100, 1)
+            )
+    except Exception as exc:
+        logger.warning("Failed to sync DB stats to Prometheus: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Runtime-mutable thresholds (update via PUT /api/config/thresholds)
+# ---------------------------------------------------------------------------
+
+_runtime_thresholds: dict = {
+    "auto_approve_confidence": AUTO_APPROVE_CONFIDENCE,
+    "auto_approve_risk_max": AUTO_APPROVE_RISK_MAX,
+    "auto_reject_confidence": AUTO_REJECT_CONFIDENCE,
+}
+
+
+def _apply_runtime_thresholds(result: dict) -> tuple:
+    """Apply current runtime thresholds to a moderation result."""
+    if result.get("requires_human_review"):
+        return "REVIEW", "human_review"
+    conf = float(result.get("confidence") or 0)
+    risk = int(result.get("risk_score") or 100)
+    if conf >= _runtime_thresholds["auto_approve_confidence"] and risk <= _runtime_thresholds["auto_approve_risk_max"]:
+        return "APPROVE", "published"
+    if conf >= _runtime_thresholds["auto_reject_confidence"]:
+        return "REJECT", "auto_rejected"
+    return "REVIEW", "human_review"
+
+
+def _fire_webhook(payload: dict) -> None:
+    """POST a JSON payload to WEBHOOK_URL if configured (called from background thread)."""
+    if not WEBHOOK_URL:
+        return
+    import json as _json
+    import urllib.request
+    try:
+        body = _json.dumps(payload).encode()
+        req = urllib.request.Request(
+            WEBHOOK_URL, data=body,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            logger.debug("Webhook delivered: HTTP %s", resp.status)
+    except Exception as exc:
+        logger.warning("Webhook delivery failed (%s): %s", WEBHOOK_URL, exc)
+
+
 # ---------------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------------
@@ -93,6 +169,7 @@ async def lifespan(app: FastAPI):
         validate()
         init_schema()
         seed_users()
+        _sync_db_stats()
         logger.info("Database schema initialized.")
     except Exception as exc:
         logger.error("Startup failed: %s", exc)
@@ -191,7 +268,7 @@ async def login(
 def _run_moderation(listing_uuid: str, title: str, category: str, description: str, user_id: str, image_ids: list) -> None:
     """Run full moderation pipeline in background after submission returns."""
     from db import get_seller_stats
-    from moderation import run_moderation, apply_threshold
+    from moderation import run_moderation
 
     start = time.time()
 
@@ -244,7 +321,7 @@ def _run_moderation(listing_uuid: str, title: str, category: str, description: s
     )
 
     # Apply threshold and route accordingly
-    decision, next_step = apply_threshold(result)
+    decision, next_step = _apply_runtime_thresholds(result)
     if next_step == "published":
         DECISIONS_TOTAL.labels(decision="auto_approve").inc()
         try:
@@ -262,7 +339,17 @@ def _run_moderation(listing_uuid: str, title: str, category: str, description: s
     else:
         DECISIONS_TOTAL.labels(decision="human_review").inc()
         enqueue_review(listing_uuid, result)
-        QUEUE_DEPTH.set(len(get_review_queue("pending")))
+
+    _sync_db_stats()
+    _fire_webhook({
+        "listing_id": listing_uuid,
+        "decision": decision,
+        "next_step": next_step,
+        "confidence": result.get("confidence"),
+        "risk_score": result.get("risk_score"),
+        "reasons": result.get("reasons", []),
+        "latency_seconds": round(latency, 2),
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -547,6 +634,189 @@ async def stats():
         "auto_approve_risk_max": AUTO_APPROVE_RISK_MAX,
         "auto_reject_confidence": AUTO_REJECT_CONFIDENCE,
     }
+
+
+# ---------------------------------------------------------------------------
+# Sellers management (admin only)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/sellers")
+async def list_sellers(moderator: str = Query(...)):
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    sellers = get_all_sellers()
+    return {
+        "sellers": [
+            {
+                "id": str(s["id"]),
+                "username": s["username"],
+                "is_banned": bool(s["is_banned"]),
+                "violation_count": int(s["previous_violation_count"]),
+                "published_count": int(s["published_count"] or 0),
+                "rejected_count": int(s["rejected_count"] or 0),
+                "pending_count": int(s["pending_count"] or 0),
+                "total_listings": int(s["total_listings"] or 0),
+                "created_at": s["created_at"].isoformat() if s["created_at"] else None,
+            }
+            for s in sellers
+        ]
+    }
+
+
+@app.post("/api/unban-user/{username}")
+async def unban_user_endpoint(username: str, moderator: str = Form(...)):
+    """Lift a ban from a user account (admin only)."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    success = unban_user(username)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"username": username, "action": "unbanned", "status": "completed"}
+
+
+# ---------------------------------------------------------------------------
+# Audit log (admin only)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/audit")
+async def audit_log(moderator: str = Query(...), limit: int = Query(100)):
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    entries = get_audit_log(min(limit, 500))
+    return {
+        "entries": [
+            {
+                "id": str(e["id"]),
+                "listing_id": str(e["listing_id"]),
+                "title": e.get("title") or "(deleted)",
+                "category": e.get("category") or "",
+                "seller": e.get("seller") or "unknown",
+                "action": e["action"],
+                "source": e["source"],
+                "performed_by": e.get("performed_by") or "system",
+                "notes": e.get("notes") or "",
+                "created_at": e["created_at"].isoformat() if e["created_at"] else None,
+            }
+            for e in entries
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Rollback a decision (admin only)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/listings/{listing_id}/rollback")
+async def rollback_listing_endpoint(
+    listing_id: str,
+    moderator: str = Form(...),
+    notes: Optional[str] = Form(None),
+):
+    """Send any listing back to the review queue for re-evaluation."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    success = rollback_listing(listing_id, moderator, notes or "")
+    if not success:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    _sync_db_stats()
+    return {"listing_id": listing_id, "action": "rollback", "status": "pending_review"}
+
+
+# ---------------------------------------------------------------------------
+# Threshold configuration
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/config/thresholds")
+async def get_thresholds():
+    return {
+        "auto_approve_confidence": _runtime_thresholds["auto_approve_confidence"],
+        "auto_approve_risk_max": _runtime_thresholds["auto_approve_risk_max"],
+        "auto_reject_confidence": _runtime_thresholds["auto_reject_confidence"],
+        "defaults": {
+            "auto_approve_confidence": AUTO_APPROVE_CONFIDENCE,
+            "auto_approve_risk_max": AUTO_APPROVE_RISK_MAX,
+            "auto_reject_confidence": AUTO_REJECT_CONFIDENCE,
+        },
+    }
+
+
+@app.put("/api/config/thresholds")
+async def update_thresholds(
+    moderator: str = Form(...),
+    auto_approve_confidence: Optional[float] = Form(None),
+    auto_approve_risk_max: Optional[int] = Form(None),
+    auto_reject_confidence: Optional[float] = Form(None),
+):
+    """Update runtime moderation thresholds (admin only, in-memory)."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if auto_approve_confidence is not None:
+        if not 0 < auto_approve_confidence <= 1:
+            raise HTTPException(status_code=400, detail="auto_approve_confidence must be 0-1")
+        _runtime_thresholds["auto_approve_confidence"] = auto_approve_confidence
+
+    if auto_approve_risk_max is not None:
+        if not 0 <= auto_approve_risk_max <= 100:
+            raise HTTPException(status_code=400, detail="auto_approve_risk_max must be 0-100")
+        _runtime_thresholds["auto_approve_risk_max"] = auto_approve_risk_max
+
+    if auto_reject_confidence is not None:
+        if not 0 < auto_reject_confidence <= 1:
+            raise HTTPException(status_code=400, detail="auto_reject_confidence must be 0-1")
+        _runtime_thresholds["auto_reject_confidence"] = auto_reject_confidence
+
+    return {"status": "updated", "thresholds": _runtime_thresholds}
+
+
+# ---------------------------------------------------------------------------
+# Model health check
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/health/models")
+async def model_health():
+    """Check that configured Ollama models are available."""
+    import json as _json
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+        available = {m["name"] for m in data.get("models", [])}
+        text_ok = TEXT_MODEL in available
+        vision_ok = VISION_MODEL in available
+        return {
+            "status": "ok" if (text_ok and vision_ok) else "degraded",
+            "ollama_url": OLLAMA_URL,
+            "text_model": {"name": TEXT_MODEL, "available": text_ok},
+            "vision_model": {"name": VISION_MODEL, "available": vision_ok},
+            "available_models": sorted(available),
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "ollama_url": OLLAMA_URL,
+            "error": str(exc),
+            "text_model": {"name": TEXT_MODEL, "available": False},
+            "vision_model": {"name": VISION_MODEL, "available": False},
+        }
 
 
 # ---------------------------------------------------------------------------

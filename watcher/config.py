@@ -82,6 +82,9 @@ AUTO_APPROVE_CONFIDENCE = float(os.getenv("AUTO_APPROVE_CONFIDENCE", "0.85"))
 AUTO_APPROVE_RISK_MAX = int(os.getenv("AUTO_APPROVE_RISK_MAX", "30"))
 AUTO_REJECT_CONFIDENCE = float(os.getenv("AUTO_REJECT_CONFIDENCE", "0.80"))
 
+# Optional outbound webhook fired after each moderation decision
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
