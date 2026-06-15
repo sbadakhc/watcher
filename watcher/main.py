@@ -32,21 +32,28 @@ from config import (
 )
 from db import (
     create_listing,
+    create_user_account,
+    delete_user_account,
     enqueue_review,
+    get_all_listings,
     get_all_sellers,
     get_audit_log,
+    get_db_health,
     get_image_by_id,
+    get_insights,
     get_published_listings,
     get_review_queue,
     get_stats,
     get_user_by_username,
     init_schema,
+    replace_listing_images,
     review_item,
     rollback_listing,
     seed_users,
     store_image,
     store_moderation,
     unban_user,
+    update_user_password,
 )
 from moderation import run_moderation
 
@@ -119,6 +126,13 @@ _runtime_thresholds: dict = {
     "auto_reject_confidence": AUTO_REJECT_CONFIDENCE,
 }
 
+_webhook_status: dict = {
+    "configured": bool(WEBHOOK_URL),
+    "last_sent_at": None,
+    "last_status": "never",
+    "last_error": None,
+}
+
 
 def _apply_runtime_thresholds(result: dict) -> tuple:
     """Apply current runtime thresholds to a moderation result."""
@@ -139,6 +153,7 @@ def _fire_webhook(payload: dict) -> None:
         return
     import json as _json
     import urllib.request
+    from datetime import datetime, timezone
     try:
         body = _json.dumps(payload).encode()
         req = urllib.request.Request(
@@ -147,8 +162,13 @@ def _fire_webhook(payload: dict) -> None:
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             logger.debug("Webhook delivered: HTTP %s", resp.status)
+        _webhook_status["last_sent_at"] = datetime.now(timezone.utc).isoformat()
+        _webhook_status["last_status"] = "ok"
+        _webhook_status["last_error"] = None
     except Exception as exc:
         logger.warning("Webhook delivery failed (%s): %s", WEBHOOK_URL, exc)
+        _webhook_status["last_status"] = "error"
+        _webhook_status["last_error"] = str(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -789,34 +809,289 @@ async def update_thresholds(
 # ---------------------------------------------------------------------------
 
 
+def _check_ollama_models():
+    """Check Ollama availability and return status dict."""
+    import json as _json
+    import urllib.request
+    try:
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+        available = {m["name"] for m in data.get("models", [])}
+        return {
+            "status": "ok" if (TEXT_MODEL in available and VISION_MODEL in available) else "degraded",
+            "ollama_url": OLLAMA_URL,
+            "text_model": {"name": TEXT_MODEL, "available": TEXT_MODEL in available},
+            "vision_model": {"name": VISION_MODEL, "available": VISION_MODEL in available},
+        }
+    except Exception as exc:
+        return {
+            "status": "error", "ollama_url": OLLAMA_URL, "error": str(exc),
+            "text_model": {"name": TEXT_MODEL, "available": False},
+            "vision_model": {"name": VISION_MODEL, "available": False},
+        }
+
+
 @app.get("/api/health/models")
 async def model_health():
     """Check that configured Ollama models are available."""
     import json as _json
     import urllib.request
 
+    result = _check_ollama_models()
     try:
         req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
         available = {m["name"] for m in data.get("models", [])}
-        text_ok = TEXT_MODEL in available
-        vision_ok = VISION_MODEL in available
-        return {
-            "status": "ok" if (text_ok and vision_ok) else "degraded",
-            "ollama_url": OLLAMA_URL,
-            "text_model": {"name": TEXT_MODEL, "available": text_ok},
-            "vision_model": {"name": VISION_MODEL, "available": vision_ok},
-            "available_models": sorted(available),
-        }
-    except Exception as exc:
-        return {
-            "status": "error",
-            "ollama_url": OLLAMA_URL,
-            "error": str(exc),
-            "text_model": {"name": TEXT_MODEL, "available": False},
-            "vision_model": {"name": VISION_MODEL, "available": False},
-        }
+        result["available_models"] = sorted(available)
+    except Exception:
+        result["available_models"] = []
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Admin: All Listings
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/all-listings")
+async def all_listings_endpoint(
+    moderator: str = Query(...),
+    status: Optional[str] = Query(None),
+    seller: Optional[str] = Query(None),
+    limit: int = Query(200),
+):
+    """All listings across all sellers (admin view)."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    listings = get_all_listings(status=status or None, seller=seller or None, limit=min(limit, 500))
+    return {
+        "listings": [
+            {
+                "id": str(item["id"]),
+                "listing_id": str(item["listing_id"]),
+                "title": item["title"],
+                "category": item.get("category", "Other"),
+                "description": (item["description"] or "")[:300],
+                "price": float(item["price"]),
+                "status": item["status"],
+                "is_published": bool(item["is_published"]),
+                "seller": item.get("seller", "unknown"),
+                "seller_banned": bool(item.get("seller_banned", False)),
+                "final_decision": item.get("final_decision"),
+                "final_confidence": float(item["final_confidence"]) if item.get("final_confidence") else None,
+                "risk_score": item.get("risk_score"),
+                "image_url": f"/api/images/{item['image_id']}?width=100" if item.get("image_id") else None,
+                "created_at": item["created_at"].isoformat() if item["created_at"] else None,
+                "updated_at": item["updated_at"].isoformat() if item["updated_at"] else None,
+            }
+            for item in listings
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin: Insights
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/insights")
+async def insights_endpoint(moderator: str = Query(...)):
+    """Analytics for the admin insights panel."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return get_insights()
+
+
+# ---------------------------------------------------------------------------
+# Admin: System health
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/health/system")
+async def system_health(moderator: str = Query(...)):
+    """Full system health (admin only)."""
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    models = _check_ollama_models()
+    db = get_db_health()
+    return {
+        "service": {"version": "0.3.0", "port": PORT},
+        "models": models,
+        "database": db,
+        "webhook": {**_webhook_status, "url_configured": bool(WEBHOOK_URL)},
+        "thresholds": _runtime_thresholds,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin: User management
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/users")
+async def create_user_endpoint(
+    moderator: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    is_admin: bool = Form(False),
+):
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from auth import hash_password
+    success = create_user_account(username, hash_password(password), is_admin)
+    if not success:
+        raise HTTPException(status_code=409, detail="Username already exists")
+    return {"username": username, "is_admin": is_admin, "status": "created"}
+
+
+@app.delete("/api/users/{username}")
+async def delete_user_endpoint(username: str, moderator: str = Form(...)):
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if username == moderator:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    success = delete_user_account(username)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or is an admin account")
+    return {"username": username, "status": "deleted"}
+
+
+@app.put("/api/users/{username}/password")
+async def reset_password_endpoint(
+    username: str,
+    moderator: str = Form(...),
+    password: str = Form(...),
+):
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from auth import hash_password
+    success = update_user_password(username, hash_password(password))
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"username": username, "status": "password_updated"}
+
+
+# ---------------------------------------------------------------------------
+# Admin: Edit listing
+# ---------------------------------------------------------------------------
+
+
+@app.patch("/api/listings/{listing_id}/admin")
+async def admin_edit_listing(
+    listing_id: str,
+    background_tasks: BackgroundTasks,
+    moderator: str = Form(...),
+    title: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    direct_publish: bool = Form(False),
+    images: Optional[list[UploadFile]] = File(None),
+):
+    """Admin edit: update fields, optionally replace images, optionally publish directly."""
+    from db import _get_conn, get_images_for_listing, auto_publish_listing
+
+    mod = get_user_by_username(moderator)
+    if not mod or not mod.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Fetch current listing
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            from psycopg2.extras import RealDictCursor as _RDC
+            cur = conn.cursor(cursor_factory=_RDC)
+            cur.execute(
+                """
+                SELECT l.id, l.title, l.category, l.description, l.price, l.status,
+                       l.user_id, u.username
+                FROM watcher.listings l
+                JOIN watcher.users u ON u.id = l.user_id
+                WHERE l.id = %s
+                """,
+                (listing_id,),
+            )
+            current = cur.fetchone()
+
+    if not current:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    new_title = title if title is not None else current["title"]
+    new_category = category if category is not None else current["category"]
+    new_description = description if description is not None else current["description"]
+    new_price = price if price is not None else float(current["price"])
+
+    text_changed = (
+        title is not None or category is not None or description is not None or price is not None
+    )
+
+    # Update text fields if any changed
+    if text_changed:
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE watcher.listings
+                    SET title = %s, category = %s, description = %s, price = %s, updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (new_title, new_category, new_description, new_price, listing_id),
+                )
+
+    images_changed = False
+    if images:
+        validated_images = []
+        for img in images:
+            img_bytes = await img.read()
+            if len(img_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=413, detail=f"Image {img.filename} too large (max 5MB)")
+            mime = img.content_type or "application/octet-stream"
+            fname = (img.filename or "uploaded").lower()
+            if not (mime in {"image/jpeg", "image/png"} or fname.endswith((".jpg", ".jpeg", ".png"))):
+                raise HTTPException(status_code=415, detail="Only JPG, JPEG, and PNG images are allowed")
+            validated_images.append({"data": img_bytes, "mime_type": mime, "file_name": img.filename or "uploaded"})
+        replace_listing_images(listing_id, validated_images)
+        images_changed = True
+
+    if direct_publish:
+        # Remove from review queue if present
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM watcher.human_review_queue WHERE listing_id = %s", (listing_id,))
+        auto_publish_listing(listing_id, f"Admin direct publish by {moderator}")
+        _sync_db_stats()
+        return {"listing_id": listing_id, "status": "published"}
+
+    if text_changed or images_changed:
+        # Reset to pending and re-run moderation
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE watcher.listings SET status = 'pending', is_published = FALSE, updated_at = NOW() WHERE id = %s",
+                    (listing_id,),
+                )
+        images_data = get_images_for_listing(listing_id)
+        image_ids = [str(img["id"]) for img in images_data]
+        background_tasks.add_task(
+            _run_moderation, listing_id, new_title, new_category, new_description,
+            str(current["user_id"]), image_ids,
+        )
+        return {"listing_id": listing_id, "status": "pending_review"}
+
+    return {"listing_id": listing_id, "status": "no_changes"}
 
 
 # ---------------------------------------------------------------------------

@@ -221,6 +221,30 @@
     .hero h1{font-size:2.5rem}
     .hero-float{display:none}
   }
+
+  /* TABS */
+  .tab-bar{display:flex;gap:.25rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .tab-btn{padding:.5rem 1rem;border-radius:8px;border:none;background:var(--c-light);
+           color:var(--c-gray);font-weight:600;font-size:.85rem;cursor:pointer;transition:all .2s}
+  .tab-btn.active{background:var(--c-primary);color:#fff}
+  /* BADGE */
+  .age-badge{display:inline-block;padding:.2rem .5rem;border-radius:12px;font-size:.75rem;font-weight:700}
+  .age-ok{background:#f0fdf4;color:#15803d}
+  .age-warn{background:#fffbeb;color:#92400e}
+  .age-crit{background:#fef2f2;color:#b91c1c}
+  /* INSIGHT CARD */
+  .insight-card{background:var(--c-white);border-radius:12px;padding:1.5rem;
+                box-shadow:0 2px 4px rgba(0,0,0,.08)}
+  .insight-val{font-size:2.5rem;font-weight:800;line-height:1}
+  .insight-label{color:var(--c-gray);font-size:.9rem;margin-top:.5rem}
+  /* MODAL BACKDROP */
+  .admin-modal{position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);
+               display:flex;align-items:center;justify-content:center;z-index:2000}
+  .admin-modal-box{background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:560px;
+                   max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+  /* HEALTH DOT */
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:.4rem}
+  .dot-ok{background:var(--c-success)}.dot-warn{background:var(--c-warning)}.dot-err{background:var(--c-danger)}
 </style>
 </head>
 <body>
@@ -293,6 +317,18 @@
   <div id="page-audit" class="page">
     <div id="audit-content"></div>
   </div>
+
+  <!-- ALL LISTINGS PAGE (admin only) -->
+  <div id="page-all-listings" class="page"><div id="all-listings-content"></div></div>
+
+  <!-- USER MANAGEMENT PAGE (admin only) -->
+  <div id="page-users" class="page"><div id="users-content"></div></div>
+
+  <!-- SYSTEM PAGE (admin only) -->
+  <div id="page-system" class="page"><div id="system-content"></div></div>
+
+  <!-- INSIGHTS PAGE (admin only) -->
+  <div id="page-insights" class="page"><div id="insights-content"></div></div>
 
 </div>
 
@@ -374,6 +410,22 @@ function render() {
     document.getElementById('page-audit').classList.add('active');
     if (!currentUser || !currentUser.is_admin) { navigate('/'); return; }
     loadAudit();
+  } else if (hash === '/all-listings') {
+    document.getElementById('page-all-listings').classList.add('active');
+    if (!currentUser || !currentUser.is_admin) { navigate('/'); return; }
+    loadAllListings();
+  } else if (hash === '/users') {
+    document.getElementById('page-users').classList.add('active');
+    if (!currentUser || !currentUser.is_admin) { navigate('/'); return; }
+    loadUsers();
+  } else if (hash === '/system') {
+    document.getElementById('page-system').classList.add('active');
+    if (!currentUser || !currentUser.is_admin) { navigate('/'); return; }
+    loadSystem();
+  } else if (hash === '/insights') {
+    document.getElementById('page-insights').classList.add('active');
+    if (!currentUser || !currentUser.is_admin) { navigate('/'); return; }
+    loadInsights();
   } else {
     navigate('/');
   }
@@ -448,8 +500,12 @@ function updateNavUser() {
   const navLinks = !isAdmin
     ? `<button class="nav-link" onclick="navigate('/dashboard')">&#x1f4ca; My Listings</button>`
     : `<button class="nav-link" onclick="navigate('/review')">&#x1f4cb; Queue</button>
+       <button class="nav-link" onclick="navigate('/all-listings')">&#x1f4e6; Listings</button>
        <button class="nav-link" onclick="navigate('/sellers')">&#x1f465; Sellers</button>
-       <button class="nav-link" onclick="navigate('/audit')">&#x1f4dc; Audit</button>`;
+       <button class="nav-link" onclick="navigate('/users')">&#x1f464; Users</button>
+       <button class="nav-link" onclick="navigate('/audit')">&#x1f4dc; Audit</button>
+       <button class="nav-link" onclick="navigate('/insights')">&#x1f4ca; Insights</button>
+       <button class="nav-link" onclick="navigate('/system')">&#x2699;&#xfe0f; System</button>`;
 
   area.innerHTML = `
     ${navLinks}
@@ -1044,6 +1100,593 @@ async function rollbackListing(listingId, title) {
     alert(`Listing "${title}" has been sent back to the review queue.`);
     await loadAudit();
   } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+// ---------------------------------------------------------------------------
+// All Listings (admin)
+// ---------------------------------------------------------------------------
+let allListingsFilter = 'all';
+
+async function loadAllListings() {
+  if (!currentUser || !currentUser.is_admin) return;
+  const el = document.getElementById('all-listings-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading listings...</p></div>';
+  try {
+    const status = allListingsFilter === 'all' ? '' : allListingsFilter;
+    const url = `/api/all-listings?moderator=${encodeURIComponent(currentUser.username)}${status ? '&status=' + encodeURIComponent(status) : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to load listings');
+    const data = await res.json();
+    renderAllListings(data.listings || [], allListingsFilter);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderAllListings(listings, statusFilter) {
+  const el = document.getElementById('all-listings-content');
+  const filters = ['all', 'published', 'rejected', 'pending'];
+  const tabBar = `<div class="tab-bar">${filters.map(f =>
+    `<button class="tab-btn${statusFilter === f ? ' active' : ''}" onclick="allListingsFilter='${f}';loadAllListings()">${f.charAt(0).toUpperCase()+f.slice(1)}</button>`
+  ).join('')}</div>`;
+
+  if (!listings.length) {
+    el.innerHTML = `<div class="section-header"><h2>All Listings</h2><button class="btn btn-primary btn-sm" onclick="loadAllListings()">Refresh</button></div>
+      ${tabBar}<div class="card empty"><p style="color:var(--c-gray)">No listings found.</p></div>`;
+    return;
+  }
+
+  const rows = listings.map(item => {
+    const statusCls = item.status === 'published' ? 'status-approved' : item.status === 'rejected' ? 'status-rejected' : 'status-pending';
+    const conf = item.final_confidence != null ? `${(item.final_confidence * 100).toFixed(0)}%` : '--';
+    const imgHtml = item.image_url
+      ? `<img src="${esc(item.image_url)}" alt="${esc(item.title)}" style="width:50px;height:50px;object-fit:cover;border-radius:6px">`
+      : '<span style="color:#ccc;font-size:1.5rem">&#x1f4f7;</span>';
+    return `<tr>
+      <td>${imgHtml}</td>
+      <td style="max-width:180px"><strong title="${esc(item.title)}">${esc(item.title.length > 40 ? item.title.slice(0,40)+'...' : item.title)}</strong></td>
+      <td>${esc(item.seller || 'unknown')}${item.seller_banned ? ' <span style="color:var(--c-danger);font-size:.75rem">(banned)</span>' : ''}</td>
+      <td><span class="badge" style="margin:0">${esc(item.category || 'Other')}</span></td>
+      <td><span class="status-badge ${statusCls}" style="margin:0;font-size:.75rem">${esc(item.status)}</span></td>
+      <td style="font-size:.85rem">${item.final_decision ? esc(item.final_decision) : '--'}</td>
+      <td style="font-size:.85rem">${conf}</td>
+      <td style="font-size:.8rem;color:var(--c-gray)">${fmtDate(item.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <button class="btn btn-sm" style="background:#e0e7ff;color:var(--c-primary);border:none" onclick='showEditModal(${JSON.stringify({id:item.id,title:item.title,category:item.category,description:"",price:item.price})})'>Edit</button>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:none" onclick="rollbackListing('${esc(item.id)}','${esc(item.title)}')">Rollback</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteListingAdmin('${esc(item.id)}','${esc(item.title)}')">Del</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>All Listings (${listings.length})</h2>
+      <button class="btn btn-primary btn-sm" onclick="loadAllListings()">Refresh</button>
+    </div>
+    ${tabBar}
+    <div class="card" style="overflow:auto;padding:0">
+      <table class="tbl">
+        <thead><tr>
+          <th>Image</th><th>Title</th><th>Seller</th><th>Category</th>
+          <th>Status</th><th>AI Decision</th><th>Confidence</th><th>Age</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function showEditModal(item) {
+  const existing = document.getElementById('admin-edit-modal');
+  if (existing) existing.remove();
+
+  const cats = ['Electronics','Clothing','Home','Vehicles','Services','Other'];
+  const catOpts = cats.map(c => `<option value="${esc(c)}"${c === (item.category||'Other') ? ' selected' : ''}>${esc(c)}</option>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'admin-edit-modal';
+  modal.className = 'admin-modal';
+  modal.innerHTML = `
+    <div class="admin-modal-box">
+      <h2 style="margin-bottom:1.5rem;font-size:1.25rem;font-weight:800">Edit Listing</h2>
+      <div class="form-group">
+        <label>Title</label>
+        <input id="aedit-title" class="input" type="text" value="${esc(item.title)}">
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="aedit-category" class="input">${catOpts}</select>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="aedit-description" class="input" rows="4">${esc(item.description || '')}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Price ($)</label>
+        <input id="aedit-price" class="input" type="number" step="0.01" min="0" value="${esc(String(item.price || ''))}">
+      </div>
+      <div class="form-group">
+        <label>Replace Images (optional)</label>
+        <input id="aedit-images" class="input" type="file" accept=".jpg,.jpeg,.png" multiple>
+        <p style="color:var(--c-gray);font-size:.85rem;margin-top:.5rem">Leave empty to keep existing images.</p>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:.75rem">
+        <input type="checkbox" id="aedit-publish" style="width:18px;height:18px;cursor:pointer">
+        <label for="aedit-publish" style="margin:0;font-weight:600;cursor:pointer">Publish directly (skip re-moderation)</label>
+      </div>
+      <div id="aedit-msg" style="margin-bottom:1rem"></div>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn btn-primary" style="flex:1" onclick="adminEditListing('${esc(item.id)}',document.getElementById('admin-edit-modal'))">Save</button>
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('admin-edit-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function adminEditListing(listingId, modal) {
+  const msgEl = modal.querySelector('#aedit-msg');
+  msgEl.innerHTML = '';
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  const titleVal = modal.querySelector('#aedit-title').value.trim();
+  const catVal = modal.querySelector('#aedit-category').value;
+  const descVal = modal.querySelector('#aedit-description').value.trim();
+  const priceVal = modal.querySelector('#aedit-price').value;
+  const directPublish = modal.querySelector('#aedit-publish').checked;
+  const imageInput = modal.querySelector('#aedit-images');
+
+  if (titleVal) fd.append('title', titleVal);
+  if (catVal) fd.append('category', catVal);
+  if (descVal) fd.append('description', descVal);
+  if (priceVal) fd.append('price', priceVal);
+  fd.append('direct_publish', directPublish ? 'true' : 'false');
+  if (imageInput.files.length > 0) {
+    for (const f of imageInput.files) fd.append('images', f);
+  }
+
+  try {
+    const res = await fetch(`/api/listings/${encodeURIComponent(listingId)}/admin`, { method: 'PATCH', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Update failed');
+    modal.remove();
+    await loadAllListings();
+  } catch (err) {
+    msgEl.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+async function deleteListingAdmin(listingId, title) {
+  if (!confirm(`Delete listing "${title}" permanently? This cannot be undone.`)) return;
+  const fd = new FormData();
+  fd.append('username', currentUser.username);
+  try {
+    const res = await fetch(`/api/listings/${encodeURIComponent(listingId)}`, { method: 'DELETE', body: fd });
+    if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
+    await loadAllListings();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+// ---------------------------------------------------------------------------
+// User Management (admin)
+// ---------------------------------------------------------------------------
+async function loadUsers() {
+  if (!currentUser || !currentUser.is_admin) return;
+  const el = document.getElementById('users-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading users...</p></div>';
+  try {
+    const res = await fetch(`/api/sellers?moderator=${encodeURIComponent(currentUser.username)}`);
+    if (!res.ok) throw new Error('Failed to load users');
+    const data = await res.json();
+    renderUsers(data.sellers || []);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderUsers(users) {
+  const el = document.getElementById('users-content');
+  const rows = users.map(u => `
+    <tr>
+      <td><strong>${esc(u.username)}</strong></td>
+      <td><span class="badge" style="margin:0">Seller</span></td>
+      <td>${u.is_banned
+        ? '<span class="status-badge status-rejected" style="font-size:.75rem;margin:0">Banned</span>'
+        : '<span class="status-badge status-approved" style="font-size:.75rem;margin:0">Active</span>'}</td>
+      <td style="text-align:center">${u.violation_count}</td>
+      <td style="text-align:center">${u.total_listings}</td>
+      <td style="color:var(--c-gray);font-size:.85rem">${fmtDate(u.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <button class="btn btn-sm" style="background:#e0e7ff;color:var(--c-primary);border:none" onclick="resetPassword('${esc(u.username)}')">Reset PW</button>
+          ${u.is_banned
+            ? `<button class="btn btn-success btn-sm" onclick="unbanUser('${esc(u.username)}')">Unban</button>`
+            : `<button class="btn btn-danger btn-sm" onclick="blockUser('${esc(u.username)}')">Ban</button>`}
+          <button class="btn btn-sm" style="background:#fef2f2;color:var(--c-danger);border:1px solid #fecaca" onclick="deleteUser('${esc(u.username)}')">Delete</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>Users (${users.length})</h2>
+      <button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ Create User</button>
+    </div>
+    <div class="card" style="overflow:auto;padding:0">
+      <table class="tbl">
+        <thead><tr>
+          <th>Username</th><th>Role</th><th>Status</th>
+          <th>Violations</th><th>Listings</th><th>Joined</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${rows.length ? rows : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--c-gray)">No users found.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function showCreateUserModal() {
+  const existing = document.getElementById('create-user-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'create-user-modal';
+  modal.className = 'admin-modal';
+  modal.innerHTML = `
+    <div class="admin-modal-box">
+      <h2 style="margin-bottom:1.5rem;font-size:1.25rem;font-weight:800">Create User</h2>
+      <div class="form-group">
+        <label>Username</label>
+        <input id="cu-username" class="input" type="text" placeholder="username" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input id="cu-password" class="input" type="password" placeholder="password">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:.75rem">
+        <input type="checkbox" id="cu-admin" style="width:18px;height:18px;cursor:pointer">
+        <label for="cu-admin" style="margin:0;font-weight:600;cursor:pointer">Admin role</label>
+      </div>
+      <div id="cu-msg" style="margin-bottom:1rem"></div>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn btn-primary" style="flex:1" onclick="createUser(document.getElementById('create-user-modal'))">Create</button>
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('create-user-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function createUser(modal) {
+  const msgEl = modal.querySelector('#cu-msg');
+  msgEl.innerHTML = '';
+  const username = modal.querySelector('#cu-username').value.trim();
+  const password = modal.querySelector('#cu-password').value;
+  const isAdmin = modal.querySelector('#cu-admin').checked;
+  if (!username || !password) {
+    msgEl.innerHTML = '<div class="alert alert-error">Username and password are required.</div>';
+    return;
+  }
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  fd.append('username', username);
+  fd.append('password', password);
+  fd.append('is_admin', isAdmin ? 'true' : 'false');
+  try {
+    const res = await fetch('/api/users', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Create failed');
+    modal.remove();
+    await loadUsers();
+  } catch (err) {
+    msgEl.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+async function resetPassword(username) {
+  const newPw = prompt(`Enter new password for "${username}":`);
+  if (newPw === null || !newPw.trim()) return;
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  fd.append('password', newPw.trim());
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(username)}/password`, { method: 'PUT', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    alert(`Password updated for "${username}".`);
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Delete user "${username}"? This will permanently delete their account and ALL their listings. This cannot be undone.`)) return;
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Delete failed');
+    await loadUsers();
+  } catch (err) { alert(`Error: ${err.message}`); }
+}
+
+// ---------------------------------------------------------------------------
+// Insights (admin)
+// ---------------------------------------------------------------------------
+async function loadInsights() {
+  if (!currentUser || !currentUser.is_admin) return;
+  const el = document.getElementById('insights-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading insights...</p></div>';
+  try {
+    const res = await fetch(`/api/insights?moderator=${encodeURIComponent(currentUser.username)}`);
+    if (!res.ok) throw new Error('Failed to load insights');
+    const data = await res.json();
+    renderInsights(data);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderInsights(data) {
+  const el = document.getElementById('insights-content');
+
+  const statCards = `
+    <div class="grid grid-3" style="margin-bottom:2rem">
+      <div class="insight-card">
+        <div class="insight-val">${data.human_override_rate}%</div>
+        <div class="insight-label">Human Override Rate<br><small>of decisions rolled back</small></div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-val">${data.vision_bypass_rate}%</div>
+        <div class="insight-label">Vision Bypass Rate<br><small>decided by text alone</small></div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-val">${data.total_moderated}</div>
+        <div class="insight-label">Total Moderated</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-val">${(data.queue_age || []).length}</div>
+        <div class="insight-label">Pending in Queue</div>
+      </div>
+    </div>`;
+
+  const catRows = (data.category_breakdown || []).map(c => {
+    const vr = c.total > 0 ? ((c.rejected / c.total) * 100).toFixed(1) : '0.0';
+    return `<tr>
+      <td>${esc(c.category)}</td>
+      <td style="text-align:center">${c.total}</td>
+      <td style="text-align:center;color:var(--c-success)">${c.approved}</td>
+      <td style="text-align:center;color:var(--c-danger)">${c.rejected}</td>
+      <td style="text-align:center;color:var(--c-warning)">${c.review}</td>
+      <td style="text-align:center">${vr}%</td>
+    </tr>`;
+  }).join('');
+
+  const catTable = `
+    <div class="card" style="padding:1.5rem;margin-bottom:2rem">
+      <h3 style="margin-bottom:1rem;font-weight:700">Category Breakdown</h3>
+      <div style="overflow:auto">
+        <table class="tbl">
+          <thead><tr><th>Category</th><th>Total</th><th>Approved</th><th>Rejected</th><th>Review</th><th>Violation %</th></tr></thead>
+          <tbody>${catRows || '<tr><td colspan="6" style="text-align:center;color:var(--c-gray)">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const maxReasonCount = (data.reasons_frequency || []).reduce((m, r) => Math.max(m, r.count), 1);
+  const reasonRows = (data.reasons_frequency || []).map(r => {
+    const pct = Math.round((r.count / maxReasonCount) * 100);
+    return `<tr>
+      <td>${esc(r.reason)}</td>
+      <td style="text-align:center">${r.count}</td>
+      <td style="width:120px"><div style="background:#e2e8f0;border-radius:4px;height:8px"><div style="background:var(--c-danger);width:${pct}%;height:8px;border-radius:4px"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  const maxConfCount = (data.confidence_distribution || []).reduce((m, r) => Math.max(m, r.count), 1);
+  const confRows = (data.confidence_distribution || []).map(r => {
+    const pct = Math.round((r.count / maxConfCount) * 100);
+    return `<tr>
+      <td>${esc(r.band)}</td>
+      <td style="text-align:center">${r.count}</td>
+      <td style="width:120px"><div style="background:#e2e8f0;border-radius:4px;height:8px"><div style="background:var(--c-primary);width:${pct}%;height:8px;border-radius:4px"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  const detailCols = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem">
+      <div class="card" style="padding:1.5rem">
+        <h3 style="margin-bottom:1rem;font-weight:700">Top Flag Reasons</h3>
+        <table class="tbl">
+          <thead><tr><th>Reason</th><th>Count</th><th>Bar</th></tr></thead>
+          <tbody>${reasonRows || '<tr><td colspan="3" style="text-align:center;color:var(--c-gray)">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="card" style="padding:1.5rem">
+        <h3 style="margin-bottom:1rem;font-weight:700">Confidence Distribution</h3>
+        <table class="tbl">
+          <thead><tr><th>Band</th><th>Count</th><th>Bar</th></tr></thead>
+          <tbody>${confRows || '<tr><td colspan="3" style="text-align:center;color:var(--c-gray)">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  let queueHtml = '';
+  if ((data.queue_age || []).length > 0) {
+    const qRows = data.queue_age.map(q => {
+      const h = q.age_hours;
+      const ageCls = h < 1 ? 'age-ok' : h < 4 ? 'age-warn' : 'age-crit';
+      const hours = Math.floor(h);
+      const mins = Math.round((h - hours) * 60);
+      const ageStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      return `<tr>
+        <td style="max-width:200px">${esc(q.title.length > 40 ? q.title.slice(0,40)+'...' : q.title)}</td>
+        <td>${esc(q.seller)}</td>
+        <td><span class="priority-badge priority-${q.priority === 'high' ? 'high' : q.priority === 'normal' ? 'medium' : 'low'}">${esc(q.priority)}</span></td>
+        <td><span class="age-badge ${ageCls}">${ageStr}</span></td>
+      </tr>`;
+    }).join('');
+    queueHtml = `
+      <div class="card" style="padding:1.5rem;margin-bottom:2rem">
+        <h3 style="margin-bottom:1rem;font-weight:700">Queue Age</h3>
+        <table class="tbl">
+          <thead><tr><th>Title</th><th>Seller</th><th>Priority</th><th>Waiting</th></tr></thead>
+          <tbody>${qRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>Insights</h2>
+      <button class="btn btn-primary btn-sm" onclick="loadInsights()">Refresh</button>
+    </div>
+    ${statCards}
+    ${catTable}
+    ${detailCols}
+    ${queueHtml}`;
+}
+
+// ---------------------------------------------------------------------------
+// System (admin)
+// ---------------------------------------------------------------------------
+async function loadSystem() {
+  if (!currentUser || !currentUser.is_admin) return;
+  const el = document.getElementById('system-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color:var(--c-gray)">Loading system info...</p></div>';
+  try {
+    const [sysRes, thrRes] = await Promise.all([
+      fetch(`/api/health/system?moderator=${encodeURIComponent(currentUser.username)}`),
+      fetch('/api/config/thresholds'),
+    ]);
+    if (!sysRes.ok) throw new Error('Failed to load system health');
+    const sys = await sysRes.json();
+    const thresholds = thrRes.ok ? await thrRes.json() : {};
+    renderSystem(sys, thresholds);
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
+}
+
+function renderSystem(sys, thresholds) {
+  const el = document.getElementById('system-content');
+  const m = sys.models || {};
+  const modelDotCls = m.status === 'ok' ? 'dot-ok' : 'dot-err';
+  const modelStatusTxt = m.status || 'unknown';
+
+  const modelsHtml = `
+    <div class="insight-card" style="margin-bottom:1.5rem">
+      <h3 style="margin-bottom:1rem;font-weight:700"><span class="dot ${modelDotCls}"></span>Model Health &mdash; ${esc(modelStatusTxt)}</h3>
+      <p style="color:var(--c-gray);font-size:.9rem;margin-bottom:.75rem">Ollama URL: <code>${esc(m.ollama_url || '--')}</code></p>
+      <table class="tbl">
+        <thead><tr><th>Model</th><th>Name</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Text</td>
+            <td><code>${esc((m.text_model || {}).name || '--')}</code></td>
+            <td>${(m.text_model || {}).available
+              ? '<span class="status-badge status-approved" style="margin:0;font-size:.75rem">Available</span>'
+              : '<span class="status-badge status-rejected" style="margin:0;font-size:.75rem">Unavailable</span>'}</td>
+          </tr>
+          <tr>
+            <td>Vision</td>
+            <td><code>${esc((m.vision_model || {}).name || '--')}</code></td>
+            <td>${(m.vision_model || {}).available
+              ? '<span class="status-badge status-approved" style="margin:0;font-size:.75rem">Available</span>'
+              : '<span class="status-badge status-rejected" style="margin:0;font-size:.75rem">Unavailable</span>'}
+              <span style="color:var(--c-gray);font-size:.75rem;margin-left:.5rem">(~6min avg)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  const thr = sys.thresholds || thresholds;
+  const threshHtml = `
+    <div class="insight-card" style="margin-bottom:1.5rem">
+      <h3 style="margin-bottom:1rem;font-weight:700">Threshold Configuration</h3>
+      <div id="thresh-msg" style="margin-bottom:.75rem"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem">
+        <div class="form-group" style="margin:0">
+          <label style="font-size:.85rem">Auto-Approve Confidence</label>
+          <input id="thr-approve-conf" class="input" type="number" step="0.01" min="0" max="1" value="${esc(String(thr.auto_approve_confidence || ''))}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:.85rem">Auto-Approve Risk Max</label>
+          <input id="thr-approve-risk" class="input" type="number" step="1" min="0" max="100" value="${esc(String(thr.auto_approve_risk_max || ''))}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:.85rem">Auto-Reject Confidence</label>
+          <input id="thr-reject-conf" class="input" type="number" step="0.01" min="0" max="1" value="${esc(String(thr.auto_reject_confidence || ''))}">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="updateThresholds()">Update Thresholds</button>
+      <p style="color:var(--c-gray);font-size:.8rem;margin-top:.75rem">Changes take effect immediately, reset on restart.</p>
+    </div>`;
+
+  const db = sys.database || {};
+  const dbStats = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem">
+      ${statCard('Listings', db.listings || 0, 'var(--c-primary)')}
+      ${statCard('Moderated', db.listing_moderation || 0, '#27ae60')}
+      ${statCard('Queue Items', db.human_review_queue || 0, 'var(--c-warning)')}
+      ${statCard('Publish Log', db.listing_publish_log || 0, '#7c3aed')}
+    </div>`;
+
+  const wh = sys.webhook || {};
+  const webhookHtml = `
+    <div class="insight-card" style="margin-bottom:1.5rem">
+      <h3 style="margin-bottom:1rem;font-weight:700">Webhook Status</h3>
+      <table class="tbl">
+        <tbody>
+          <tr><td style="font-weight:600">Configured</td><td>${wh.url_configured ? '<span style="color:var(--c-success)">Yes</span>' : 'No'}</td></tr>
+          <tr><td style="font-weight:600">Last Sent</td><td>${esc(wh.last_sent_at || 'never')}</td></tr>
+          <tr><td style="font-weight:600">Last Status</td><td>${esc(wh.last_status || '--')}</td></tr>
+          ${wh.last_error ? `<tr><td style="font-weight:600">Last Error</td><td style="color:var(--c-danger);font-size:.85rem">${esc(wh.last_error)}</td></tr>` : ''}
+        </tbody>
+      </table>
+    </div>`;
+
+  const svc = sys.service || {};
+  const svcHtml = `
+    <div class="insight-card" style="margin-bottom:1.5rem">
+      <h3 style="margin-bottom:1rem;font-weight:700">Service Info</h3>
+      <table class="tbl">
+        <tbody>
+          <tr><td style="font-weight:600">Version</td><td>${esc(svc.version || '--')}</td></tr>
+          <tr><td style="font-weight:600">Port</td><td>${esc(String(svc.port || '--'))}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="section-header">
+      <h2>System</h2>
+      <button class="btn btn-primary btn-sm" onclick="loadSystem()">Refresh</button>
+    </div>
+    ${modelsHtml}
+    ${threshHtml}
+    <h3 style="margin-bottom:1rem;font-weight:700">Pipeline Stats</h3>
+    ${dbStats}
+    ${webhookHtml}
+    ${svcHtml}`;
+}
+
+async function updateThresholds() {
+  const msgEl = document.getElementById('thresh-msg');
+  if (msgEl) msgEl.innerHTML = '';
+  const fd = new FormData();
+  fd.append('moderator', currentUser.username);
+  const ac = document.getElementById('thr-approve-conf').value;
+  const ar = document.getElementById('thr-approve-risk').value;
+  const rc = document.getElementById('thr-reject-conf').value;
+  if (ac) fd.append('auto_approve_confidence', ac);
+  if (ar) fd.append('auto_approve_risk_max', ar);
+  if (rc) fd.append('auto_reject_confidence', rc);
+  try {
+    const res = await fetch('/api/config/thresholds', { method: 'PUT', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Update failed');
+    if (msgEl) msgEl.innerHTML = '<div class="alert alert-success">Thresholds updated successfully.</div>';
+    setTimeout(() => loadSystem(), 1200);
+  } catch (err) {
+    if (msgEl) msgEl.innerHTML = `<div class="alert alert-error"><span>&#x26a0;&#xfe0f;</span> ${esc(err.message)}</div>`;
+  }
 }
 
 // ---------------------------------------------------------------------------
