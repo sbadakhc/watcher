@@ -117,6 +117,7 @@ def init_schema() -> None:
         evidence JSONB,
         summary TEXT,
         flags JSONB,
+        latency_seconds DECIMAL(8,3),
         created_at TIMESTAMP DEFAULT NOW(),
         processed_at TIMESTAMP
     );
@@ -158,6 +159,10 @@ def init_schema() -> None:
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(ddl)
+            # Idempotent migration for existing installs
+            cur.execute(
+                "ALTER TABLE watcher.listing_moderation ADD COLUMN IF NOT EXISTS latency_seconds DECIMAL(8,3)"
+            )
     logger.info("Database schema initialized.")
 
 
@@ -240,8 +245,9 @@ def store_moderation(
     text_result: dict,
     image_result: Optional[dict],
     final_result: dict,
+    latency_seconds: Optional[float] = None,
 ) -> None:
-    """Store moderation result with full evidence, risk score, flags."""
+    """Store moderation result with full evidence, risk score, flags, and measured latency."""
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -250,8 +256,9 @@ def store_moderation(
                     (listing_id, text_model, vision_model,
                      text_decision, text_confidence, text_reasons,
                      image_decision, image_confidence, image_caption, image_reasons,
-                     final_decision, final_confidence, risk_score, evidence, summary, flags, processed_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                     final_decision, final_confidence, risk_score, evidence, summary, flags,
+                     latency_seconds, processed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 """,
                 (
                     listing_id,
@@ -270,6 +277,7 @@ def store_moderation(
                     json.dumps(final_result.get("evidence", [])),
                     final_result.get("summary"),
                     json.dumps(final_result.get("flags", [])),
+                    round(latency_seconds, 3) if latency_seconds is not None else None,
                 ),
             )
 
@@ -372,7 +380,7 @@ def get_stats() -> dict:
             cur.execute("SELECT COUNT(*) FROM watcher.human_review_queue WHERE status = 'pending'")
             queue_depth = cur.fetchone()[0]
             cur.execute(
-                "SELECT AVG(EXTRACT(EPOCH FROM (processed_at - created_at))) FROM watcher.listing_moderation WHERE processed_at IS NOT NULL"
+                "SELECT AVG(latency_seconds) FROM watcher.listing_moderation WHERE latency_seconds IS NOT NULL"
             )
             avg_latency = cur.fetchone()[0]
             return {

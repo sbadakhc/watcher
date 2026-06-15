@@ -32,9 +32,10 @@ def _read_secret(name: str, default: str = "") -> str:
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 # Model names are case-sensitive in Ollama; must match 'ollama list' output exactly
-# qwen2.5:7b provides much better JSON reliability than qwen3:4B for structured output
 TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b")
 VISION_MODEL = os.getenv("VISION_MODEL", "qwen2.5vl:3b")
+# Vision model loads on-demand and takes 5+ minutes under GPU contention
+VISION_TIMEOUT = int(os.getenv("VISION_TIMEOUT", "360"))
 
 # ---------------------------------------------------------------------------
 # PostgreSQL (dedicated watcher database, public schema)
@@ -76,8 +77,10 @@ if not ADMIN_PASSWORD:
 
 PORT = int(os.getenv("PORT", "9104"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-AUTO_APPROVE_THRESHOLD = float(os.getenv("AUTO_APPROVE_THRESHOLD", "0.95"))
-REVIEW_THRESHOLD = float(os.getenv("REVIEW_THRESHOLD", "0.70"))
+# Moderation thresholds — tunable via env vars without code changes
+AUTO_APPROVE_CONFIDENCE = float(os.getenv("AUTO_APPROVE_CONFIDENCE", "0.85"))
+AUTO_APPROVE_RISK_MAX = int(os.getenv("AUTO_APPROVE_RISK_MAX", "30"))
+AUTO_REJECT_CONFIDENCE = float(os.getenv("AUTO_REJECT_CONFIDENCE", "0.80"))
 
 # ---------------------------------------------------------------------------
 # Validation

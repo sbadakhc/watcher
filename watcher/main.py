@@ -1,7 +1,7 @@
 """
 Watcher Moderation Service — FastAPI application.
 
-Serves both the API and the React frontend build.
+Serves both the API and the vanilla JS frontend (static/index.html).
 """
 
 import logging
@@ -19,10 +19,13 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
 from config import (
-    AUTO_APPROVE_THRESHOLD,
+    AUTO_APPROVE_CONFIDENCE,
+    AUTO_APPROVE_RISK_MAX,
+    AUTO_REJECT_CONFIDENCE,
     LOG_LEVEL,
     PORT,
-    REVIEW_THRESHOLD,
+    TEXT_MODEL,
+    VISION_MODEL,
     validate,
 )
 from db import (
@@ -223,14 +226,15 @@ def _run_moderation(listing_uuid: str, title: str, category: str, description: s
     latency = time.time() - start
     MODERATION_LATENCY.observe(latency)
 
-    # Store moderation with full evidence
+    # Store moderation with full evidence and measured latency
     store_moderation(
         listing_uuid,
-        "qwen3:4b",
-        "qwen2.5-vl:3b",
+        TEXT_MODEL,
+        VISION_MODEL,
         {"decision": result.get("decision"), "confidence": result.get("confidence"), "reasons": result.get("reasons", [])},
         {"decision": result.get("decision"), "confidence": result.get("confidence"), "reasons": result.get("reasons", []), "image_summary": result.get("image_summary")} if result.get("image_summary") else None,
         result,
+        latency_seconds=latency,
     )
 
     # Apply threshold and route accordingly
@@ -446,14 +450,15 @@ async def my_listings(user_id: str = Query(...)):
 @app.put("/api/listings/{listing_id}")
 async def update_listing_endpoint(
     listing_id: str,
+    background_tasks: BackgroundTasks,
     user_id: str = Form(...),
     title: str = Form(...),
     category: str = Form("Other"),
     description: str = Form(...),
     price: float = Form(...),
 ):
-    """Edit and resubmit a rejected listing."""
-    from db import get_user_by_username, update_listing, is_user_banned
+    """Edit and resubmit a rejected listing. Re-runs full moderation pipeline."""
+    from db import get_user_by_username, update_listing, is_user_banned, get_images_for_listing
 
     user = get_user_by_username(user_id)
     if user is None:
@@ -462,18 +467,18 @@ async def update_listing_endpoint(
     if user.get("is_banned"):
         raise HTTPException(status_code=403, detail="Account suspended")
 
-    # Update the listing
     success = update_listing(listing_id, title, category, description, price)
     if not success:
         raise HTTPException(status_code=404, detail="Listing not found")
 
-    # Re-run moderation in background
-    # Note: images stay the same, only text changes
-    # For simplicity, we trigger a new moderation cycle
+    # Re-run moderation with existing images; text changes take effect immediately
+    images_data = get_images_for_listing(listing_id)
+    image_ids = [str(img["id"]) for img in images_data]
+    background_tasks.add_task(_run_moderation, listing_id, title, category, description, str(user["id"]), image_ids)
 
     return {
         "listing_id": listing_id,
-        "message": "Listing updated and sent for moderation",
+        "message": "Listing updated and resubmitted for moderation",
         "status": "pending_review"
     }
 
@@ -532,8 +537,9 @@ async def stats():
     stats_data = get_stats()
     return {
         **stats_data,
-        "auto_approve_threshold": AUTO_APPROVE_THRESHOLD,
-        "review_threshold": REVIEW_THRESHOLD,
+        "auto_approve_confidence": AUTO_APPROVE_CONFIDENCE,
+        "auto_approve_risk_max": AUTO_APPROVE_RISK_MAX,
+        "auto_reject_confidence": AUTO_REJECT_CONFIDENCE,
     }
 
 
@@ -596,8 +602,8 @@ async def get_image(image_id: str, width: Optional[int] = Query(None)):
     image_bytes = bytes(image["image_data"])
     mime_type = image.get("mime_type", "image/jpeg")
     
-    # Resize if width parameter provided
-    if width and width > 0 and width < image_bytes.__len__() * 100:  # sanity check
+    # Resize if a valid width is requested (cap at 2048px)
+    if width and 0 < width <= 2048:
         resized_bytes, mime_type = _resize_image(image_bytes, max_width=width)
         image_bytes = resized_bytes
     
@@ -606,7 +612,7 @@ async def get_image(image_id: str, width: Optional[int] = Query(None)):
 
 
 # ---------------------------------------------------------------------------
-# Serve React frontend
+# Serve vanilla JS frontend
 # ---------------------------------------------------------------------------
 
 

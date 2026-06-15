@@ -16,7 +16,7 @@ from typing import Optional
 
 import httpx
 
-from config import OLLAMA_URL, TEXT_MODEL, VISION_MODEL
+from config import AUTO_APPROVE_CONFIDENCE, AUTO_APPROVE_RISK_MAX, AUTO_REJECT_CONFIDENCE, OLLAMA_URL, TEXT_MODEL, VISION_MODEL, VISION_TIMEOUT
 
 logger = logging.getLogger("watcher")
 
@@ -184,7 +184,7 @@ def _ollama_generate(
         resp = httpx.post(
             urljoin(OLLAMA_URL, "/api/generate"),
             json=payload,
-            timeout=300.0,  # Vision model loads on GPU on-demand; 120s not enough when queued
+            timeout=float(VISION_TIMEOUT),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -389,11 +389,11 @@ def apply_threshold(result: dict) -> tuple[str, str]:
     risk_score = result.get("risk_score", 50)
 
     # Auto-approve: LLM confident the listing is clean
-    if decision == "APPROVE" and confidence >= 0.85 and risk_score <= 30:
+    if decision == "APPROVE" and confidence >= AUTO_APPROVE_CONFIDENCE and risk_score <= AUTO_APPROVE_RISK_MAX:
         return "APPROVE", "published"
 
     # Auto-reject: LLM confident this is a violation
-    if decision == "REJECT" and confidence >= 0.80:
+    if decision == "REJECT" and confidence >= AUTO_REJECT_CONFIDENCE:
         return "REJECT", "auto_rejected"
 
     # Everything else is genuinely ambiguous — human judgement required
