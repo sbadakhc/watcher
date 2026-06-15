@@ -65,9 +65,15 @@ QUEUE_DEPTH = Gauge("watcher_review_queue_depth", "Number of listings pending hu
 MODERATION_LATENCY = Histogram(
     "watcher_moderation_latency_seconds",
     "Time spent moderating a listing",
-    buckets=[0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 30.0],
+    buckets=[30, 60, 90, 120, 180, 240, 300, 360, 420, 480, 600],
 )
 MODEL_ERRORS = Counter("watcher_model_errors_total", "Total model errors", ["stage"])
+
+# Pre-initialise label combinations so series appear at 0 before first event.
+for _d in ("auto_approve", "auto_reject", "human_review"):
+    DECISIONS_TOTAL.labels(decision=_d)
+for _s in ("text", "vision"):
+    MODEL_ERRORS.labels(stage=_s)
 
 # ---------------------------------------------------------------------------
 # Security

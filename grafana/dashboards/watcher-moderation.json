@@ -19,7 +19,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
   "links": [],
   "panels": [
     {
@@ -54,8 +53,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 4,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -67,7 +66,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -114,7 +115,9 @@
       },
       "id": 2,
       "options": {
-        "displayLabels": ["value"],
+        "displayLabels": [
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
@@ -122,7 +125,9 @@
         },
         "pieType": "donut",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -201,15 +206,18 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 4,
+        "w": 12,
         "x": 0,
-        "y": 8
+        "y": 4
       },
       "id": 3,
       "options": {
         "legend": {
-          "calcs": ["mean", "max", "p95"],
+          "calcs": [
+            "last",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
@@ -252,7 +260,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
@@ -260,8 +268,8 @@
                 "value": 1
               },
               {
-                "color": "green",
-                "value": 0
+                "color": "red",
+                "value": 5
               }
             ]
           }
@@ -269,10 +277,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
       },
       "id": 4,
       "options": {
@@ -282,7 +290,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -293,7 +303,8 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "rate(watcher_model_errors_total[5m])",
+          "expr": "(rate(watcher_model_errors_total[5m]) or vector(0))",
+          "legendFormat": "{{stage}}",
           "refId": "A"
         }
       ],
@@ -303,7 +314,10 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["watcher", "moderation"],
+  "tags": [
+    "watcher",
+    "moderation"
+  ],
   "templating": {
     "list": []
   },
@@ -315,6 +329,5 @@
   "timezone": "browser",
   "title": "Watcher Moderation Dashboard",
   "uid": "watcher-moderation",
-  "version": 1,
   "weekStart": ""
 }
