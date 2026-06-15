@@ -179,6 +179,7 @@ def _ollama_generate(
         payload["images"] = images
     if format_json:
         payload["format"] = "json"
+        payload["think"] = False
 
     try:
         resp = httpx.post(
