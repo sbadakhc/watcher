@@ -233,7 +233,7 @@ def _run_moderation(listing_uuid: str, title: str, category: str, description: s
         result,
     )
 
-    # Apply threshold and auto-publish or queue
+    # Apply threshold and route accordingly
     decision, next_step = apply_threshold(result)
     if next_step == "published":
         DECISIONS_TOTAL.labels(decision="auto_approve").inc()
@@ -242,6 +242,13 @@ def _run_moderation(listing_uuid: str, title: str, category: str, description: s
             auto_publish_listing(listing_uuid, f"Auto-approved: {result.get('summary', 'AI approved')}")
         except Exception:
             logger.error("Auto-publish failed for listing %s", listing_uuid)
+    elif next_step == "auto_rejected":
+        DECISIONS_TOTAL.labels(decision="auto_reject").inc()
+        try:
+            from db import auto_reject_listing
+            auto_reject_listing(listing_uuid, f"Auto-rejected: {result.get('summary', 'AI rejected')}")
+        except Exception:
+            logger.error("Auto-reject failed for listing %s", listing_uuid)
     else:
         DECISIONS_TOTAL.labels(decision="human_review").inc()
         enqueue_review(listing_uuid, result)

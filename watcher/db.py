@@ -493,6 +493,42 @@ def auto_publish_listing(listing_id: str, notes: Optional[str] = None) -> bool:
             return True
 
 
+def auto_reject_listing(listing_id: str, notes: Optional[str] = None) -> bool:
+    """Auto-reject a listing that was confidently flagged by AI moderation.
+
+    Marks the listing as rejected and increments the seller's violation count.
+    No human review required — the LLM was confident enough.
+    """
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE watcher.listings SET status = 'rejected', is_published = FALSE, updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, user_id
+                """,
+                (listing_id,),
+            )
+            updated = cur.fetchone()
+            if not updated:
+                return False
+
+            # Increment violation count for the seller
+            cur.execute(
+                "UPDATE watcher.users SET previous_violation_count = previous_violation_count + 1 WHERE id = %s",
+                (updated[1],),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO watcher.listing_publish_log (listing_id, action, source, performed_by, notes)
+                VALUES (%s, 'rejected', 'auto', 'system', %s)
+                """,
+                (listing_id, notes),
+            )
+            return True
+
+
 def ban_user(username: str) -> bool:
     """Ban a user by username and increment their violation count."""
     with _get_conn() as conn:

@@ -24,18 +24,19 @@ logger = logging.getLogger("watcher")
 # Text Moderation Prompt (Full Specification)
 # ---------------------------------------------------------------------------
 
-TEXT_SYSTEM_PROMPT = """You are a marketplace moderation API. You receive listing data and return a JSON moderation decision.
+TEXT_SYSTEM_PROMPT = """You are a marketplace moderation API. Evaluate the LISTING CONTENT and return a JSON decision.
 
-Rules:
-- APPROVE: safe, legitimate listing
-- REVIEW: uncertain, needs human check
-- REJECT: clear policy violation
-- If uncertain, always choose REVIEW
-- Confidence 0.0-1.0 (0.95+ for auto-approve)
-- Risk score 0-100 (0-20 low, 21-50 moderate, 51-80 elevated, 81-100 high)
+Decision rules (apply in order):
+1. REJECT (confidence >= 0.80): listing clearly violates policy -- drugs, weapons, counterfeits, fraud, illegal services
+2. APPROVE (confidence >= 0.85): listing is clearly legitimate -- ordinary consumer goods, services, second-hand items
+3. REVIEW: genuinely ambiguous -- listing could be either legitimate or a violation and you cannot tell
 
-Return ONLY valid JSON matching this schema:
-{"decision":"APPROVE","confidence":0.97,"risk_score":12,"reasons":["safe"],"evidence":["no issues"],"summary":"Safe listing","flags":[],"requires_human_review":false}
+Seller history is context, not a gate. A new seller with a clean listing is APPROVE. An established seller with a drug listing is REJECT. Do not downgrade a legitimate listing to REVIEW simply because the seller account is new.
+
+Confidence 0.0-1.0. Risk score 0-100 (0-20 low, 21-50 moderate, 51-80 elevated, 81-100 high).
+
+Return ONLY valid JSON:
+{"decision":"APPROVE","confidence":0.92,"risk_score":8,"reasons":["legitimate consumer electronics"],"evidence":["iPhone model widely sold second-hand"],"summary":"Clean listing","flags":[],"requires_human_review":false}
 
 No markdown, no other text."""
 
@@ -373,27 +374,27 @@ def run_moderation(
 
 
 def apply_threshold(result: dict) -> tuple[str, str]:
-    """Apply publication thresholds per specification.
+    """Apply publication thresholds.
 
-    Returns (decision_label, next_step)
+    The LLM is the primary decision-maker. Humans only see listings the LLM
+    cannot confidently classify.
+
+    Returns (decision_label, next_step) where next_step is one of:
+      "published"          — auto-approved, goes live immediately
+      "auto_rejected"      — auto-rejected, no human needed
+      "human_review_queue" — genuinely ambiguous, needs human judgement
     """
     decision = result.get("decision", "REVIEW")
     confidence = result.get("confidence", 0.5)
     risk_score = result.get("risk_score", 50)
-    requires_human = result.get("requires_human_review", False)
 
-    # Hard rules first
-    if decision == "REJECT":
-        return "REJECT", "human_review_queue"
-
-    if requires_human:
-        return "REVIEW", "human_review_queue"
-
-    # Threshold-based (specification says: APPROVE only if very confident and low risk)
-    if decision == "APPROVE" and confidence >= 0.95 and risk_score <= 20:
+    # Auto-approve: LLM confident the listing is clean
+    if decision == "APPROVE" and confidence >= 0.85 and risk_score <= 30:
         return "APPROVE", "published"
-    elif confidence >= 0.70 and risk_score <= 50 and decision == "APPROVE":
-        # Borderline - still auto-approve but with note
-        return "APPROVE", "published"
-    else:
-        return "REVIEW", "human_review_queue"
+
+    # Auto-reject: LLM confident this is a violation
+    if decision == "REJECT" and confidence >= 0.80:
+        return "REJECT", "auto_rejected"
+
+    # Everything else is genuinely ambiguous — human judgement required
+    return "REVIEW", "human_review_queue"
