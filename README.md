@@ -46,6 +46,7 @@ APPROVE REVIEW REJECT
 | **PostgreSQL** | Dedicated `watcher` database, `watcher` schema |
 | **Vault** | Secrets via `/run/secrets` (db password, auth credentials) |
 | **Ollama** | `localhost:11434` via host networking |
+| **Open WebUI** | Shared access to `qwen2.5:7b` and `qwen2.5vl:3b` -- use for interactive model testing and decision debugging (`http://localhost:8080`) |
 | **Prometheus** | Metrics on `:9104/api/metrics` |
 | **Grafana** | Dashboard at `grafana/dashboards/watcher-moderation.json` |
 
