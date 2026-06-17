@@ -80,10 +80,10 @@ watcher/
 
 - AIXCL platform running (`./aixcl stack start --profile sys`)
 - Vault initialized and unsealed
-- Models pulled in Ollama (names are case-sensitive; must match `ollama list` output exactly):
+- Models pulled in Ollama (names are case-sensitive; must match `./aixcl models list` output exactly):
   ```bash
-  ollama pull qwen2.5:7b
-  ollama pull qwen2.5vl:3b
+  ./aixcl models add qwen2.5:7b
+  ./aixcl models add qwen2.5vl:3b
   ```
 
 ### 1. Build and Start
@@ -108,8 +108,15 @@ To see the generated credentials:
 ./aixcl app secrets watcher
 ```
 
-The seeded `user` and `admin` UI accounts use `watcher-user-password` and
-`watcher-admin-password` respectively.
+Note the `watcher-user-password` and `watcher-admin-password` values -- you will need
+these to log in to the UI. The usernames are `user` and `admin` respectively.
+
+If the service does not become healthy, check the logs directly via podman
+(`./aixcl stack logs` only covers platform services, not app containers):
+
+```bash
+podman logs --tail 50 watcher-moderation
+```
 
 ### 2. Access the UI
 
@@ -123,10 +130,12 @@ The seed script creates 4 seller accounts with realistic account histories and
 submits 13 listings that exercise all three pipeline outcomes.
 
 ```bash
-docker cp scripts/seed.py watcher-moderation:/tmp/seed.py
-docker exec watcher-moderation python3 /tmp/seed.py \
-  --db-password $(cat /run/secrets/watcher-db-password) \
-  --user-password $(cat /run/secrets/watcher-user-password)
+DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
+USER_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-user-password)
+podman cp scripts/seed.py watcher-moderation:/tmp/seed.py
+podman exec watcher-moderation python3 /tmp/seed.py \
+  --db-password "$DB_PASS" \
+  --user-password "$USER_PASS"
 ```
 
 Expected outcome: ~7 auto-approved, ~3 auto-rejected, ~3 to human review queue.
@@ -139,6 +148,34 @@ appear here for human decision.
 ### 5. Check Stats
 
 The "Stats" tab shows pipeline throughput, average latency, and queue depth.
+
+### 6. Grafana Dashboard
+
+The watcher ships a dedicated Grafana dashboard provisioned automatically when the app starts.
+
+**Credentials:**
+
+```bash
+./aixcl vault passwords
+# Use the "Grafana admin" username and password
+```
+
+**URL:** `http://localhost:3000`
+
+Navigate to Dashboards -> Watcher -> **Watcher Moderation Dashboard**.
+
+| Panel | What it shows |
+|-------|---------------|
+| Total Moderated | Cumulative listings processed |
+| Auto-Resolve Rate | Percentage handled without human intervention |
+| Published / Auto-Rejected / In Review | Current counts by outcome |
+| Review Queue Depth | Listings awaiting human decision (key operational signal) |
+| Model Error Rate | LLM failures by pipeline stage |
+| Avg Latency | Mean end-to-end moderation time |
+| Decisions Breakdown | Pie chart of approve/reject/review ratio |
+| Moderation Latency (p95/p99) | Time-series latency percentiles |
+
+**Note on logs:** Watcher container logs are not shipped to Loki -- no log driver is configured. The platform Grafana/Loki stack will not show watcher logs. Use `podman logs` for log access (see Step 1 above).
 
 ## API Endpoints
 
