@@ -205,6 +205,28 @@ The watcher database is pre-created by the platform on app start. To browse it:
 | `human_review_queue` | Listings pending human decision |
 | `listing_publish_log` | Full audit trail of publish and reject actions |
 
+### 8. Interact with the Models (Open WebUI)
+
+Open WebUI provides a chat interface to the same models the watcher pipeline uses.
+It is useful for understanding and tuning pipeline behaviour without going through
+the full submission flow.
+
+**Credentials:**
+
+```bash
+./aixcl vault passwords
+# Use the "Open WebUI admin" username and password
+```
+
+**URL:** `http://localhost:8080`
+
+| Use case | How |
+|----------|-----|
+| Test how the text model classifies a listing | Paste the listing title and description into a chat with `qwen2.5:7b` and ask it to assess whether the content violates marketplace policy |
+| Debug an unexpected decision | Reproduce the listing text or image in Open WebUI to see the model's raw reasoning -- helps distinguish a threshold tuning issue from a model behaviour issue |
+| Test the vision model against a specific image | Start a chat with `qwen2.5vl:3b`, attach the image, and ask for a content assessment before submitting it through the pipeline |
+| Verify models are loaded and responding | Confirm both `qwen2.5:7b` and `qwen2.5vl:3b` appear in the model selector and respond before starting the watcher |
+
 ## API Endpoints
 
 | Endpoint | Method | Auth | Description |
