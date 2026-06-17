@@ -177,6 +177,34 @@ Navigate to Dashboards -> Watcher -> **Watcher Moderation Dashboard**.
 
 **Note on logs:** Watcher container logs are not shipped to Loki -- no log driver is configured. The platform Grafana/Loki stack will not show watcher logs. Use `podman logs` for log access (see Step 1 above).
 
+### 7. Inspect the Database (pgAdmin)
+
+pgAdmin is available for direct database inspection.
+
+**Credentials:**
+
+```bash
+./aixcl vault passwords
+# Use the "pgAdmin admin" username and password
+```
+
+**URL:** `http://localhost:5050`
+
+The watcher database is pre-created by the platform on app start. To browse it:
+
+1. Log in to pgAdmin
+2. In the left panel: Servers -> AIXCL -> Databases -> **watcher**
+3. Navigate to Schemas -> **watcher** -> Tables
+
+| Table | Contents |
+|-------|----------|
+| `users` | Seller and admin accounts |
+| `listings` | All listings with current moderation status |
+| `listing_images` | Uploaded images (stored as BYTEA) |
+| `listing_moderation` | AI decisions -- confidence scores, risk scores, latency |
+| `human_review_queue` | Listings pending human decision |
+| `listing_publish_log` | Full audit trail of publish and reject actions |
+
 ## API Endpoints
 
 | Endpoint | Method | Auth | Description |
