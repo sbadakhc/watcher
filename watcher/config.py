@@ -32,7 +32,7 @@ def _read_secret(name: str, default: str = "") -> str:
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 # Model names are case-sensitive in Ollama; must match 'ollama list' output exactly
-TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b")
+TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen3:4b")
 VISION_MODEL = os.getenv("VISION_MODEL", "qwen2.5vl:3b")
 # Vision model loads on-demand and takes 5+ minutes under GPU contention
 VISION_TIMEOUT = int(os.getenv("VISION_TIMEOUT", "360"))

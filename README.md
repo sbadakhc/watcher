@@ -6,7 +6,7 @@ AI-assisted listing moderation for e-commerce platforms. Built for the AIXCL BYO
 
 Watcher provides a three-outcome AI moderation pipeline for marketplace listings:
 
-1. **Text moderation** via Ollama (configurable, default `qwen2.5:7b`)
+1. **Text moderation** via Ollama (configurable, default `qwen3:4b`)
 2. **Image analysis** via vision model (configurable, default `qwen2.5vl:3b`)
 3. **Threshold routing** -- auto-approve, auto-reject, or human review queue
 
@@ -46,7 +46,7 @@ APPROVE REVIEW REJECT
 | **PostgreSQL** | Dedicated `watcher` database, `watcher` schema |
 | **Vault** | Secrets via `/run/secrets` (db password, auth credentials) |
 | **Ollama** | `localhost:11434` via host networking |
-| **Open WebUI** | Shared access to `qwen2.5:7b` and `qwen2.5vl:3b` -- use for interactive model testing and decision debugging (`http://localhost:8080`) |
+| **Open WebUI** | Shared access to `qwen3:4b` and `qwen2.5vl:3b` -- use for interactive model testing and decision debugging (`http://localhost:8080`) |
 | **Prometheus** | Metrics on `:9104/api/metrics` |
 | **Grafana** | Dashboard at `grafana/dashboards/watcher-moderation.json` |
 
@@ -83,7 +83,7 @@ watcher/
 - Vault initialized and unsealed
 - Models pulled in Ollama (names are case-sensitive; must match `./aixcl models list` output exactly):
   ```bash
-  ./aixcl models add qwen2.5:7b
+  ./aixcl models add qwen3:4b
   ./aixcl models add qwen2.5vl:3b
   ```
 
@@ -223,10 +223,10 @@ the full submission flow.
 
 | Use case | How |
 |----------|-----|
-| Test how the text model classifies a listing | Paste the listing title and description into a chat with `qwen2.5:7b` and ask it to assess whether the content violates marketplace policy |
+| Test how the text model classifies a listing | Paste the listing title and description into a chat with `qwen3:4b` and ask it to assess whether the content violates marketplace policy |
 | Debug an unexpected decision | Reproduce the listing text or image in Open WebUI to see the model's raw reasoning -- helps distinguish a threshold tuning issue from a model behaviour issue |
 | Test the vision model against a specific image | Start a chat with `qwen2.5vl:3b`, attach the image, and ask for a content assessment before submitting it through the pipeline |
-| Verify models are loaded and responding | Confirm both `qwen2.5:7b` and `qwen2.5vl:3b` appear in the model selector and respond before starting the watcher |
+| Verify models are loaded and responding | Confirm both `qwen3:4b` and `qwen2.5vl:3b` appear in the model selector and respond before starting the watcher |
 
 ## API Endpoints
 
@@ -266,7 +266,7 @@ All thresholds are tunable via environment variables without code changes.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
-| `TEXT_MODEL` | `qwen2.5:7b` | Text moderation model |
+| `TEXT_MODEL` | `qwen3:4b` | Text moderation model |
 | `VISION_MODEL` | `qwen2.5vl:3b` | Image analysis model |
 | `VISION_TIMEOUT` | `360` | Ollama request timeout in seconds |
 | `AUTO_APPROVE_CONFIDENCE` | `0.85` | Min confidence to auto-approve |
@@ -310,7 +310,7 @@ All thresholds are tunable via environment variables without code changes.
 |----------|---------|
 | CPU | 2 cores |
 | RAM | 4 GB (service) + model memory |
-| VRAM | 8 GB (qwen2.5:7b ~5 GB + qwen2.5vl:3b ~3 GB) |
+| VRAM | 8 GB (qwen3:4b ~5 GB + qwen2.5vl:3b ~3 GB) |
 | Storage | 500 MB for images |
 
 ## License

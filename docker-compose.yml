@@ -28,7 +28,7 @@ services:
       - DB_NAME=watcher
       - DB_USER=watcher
       - DB_PASSWORD_FILE=/run/secrets/watcher-db-password
-      - TEXT_MODEL=${TEXT_MODEL:-qwen2.5:7b}
+      - TEXT_MODEL=${TEXT_MODEL:-qwen3:4b}
       - VISION_MODEL=${VISION_MODEL:-qwen2.5vl:3b}
       - VISION_TIMEOUT=${VISION_TIMEOUT:-360}
       - AUTO_APPROVE_CONFIDENCE=${AUTO_APPROVE_CONFIDENCE:-0.85}
