@@ -109,8 +109,8 @@ To see the generated credentials:
 ./aixcl app secrets watcher
 ```
 
-Note the `watcher-user-password` and `watcher-admin-password` values -- you will need
-these to log in to the UI. The usernames are `user` and `admin` respectively.
+Note the `watcher-admin-password` value -- log in to the review queue as `admin`.
+Seller accounts (alice, bob, carlos, diana) are created by the seed script and share the `watcher-user-password`.
 
 If the service does not become healthy, check the logs directly via podman
 (`./aixcl stack logs` only covers platform services, not app containers):
@@ -131,10 +131,10 @@ There are two distinct seeding layers:
 
 | Layer | When | What it creates | How |
 |-------|------|-----------------|-----|
-| App startup seeding | Every container start | `user` and `admin` login accounts (passwords from Vault secrets) | Automatic -- runs in `main.py` on startup |
+| App startup seeding | Every container start | `admin` account (password from Vault secret) | Automatic -- runs in `main.py` on startup |
 | Demo seed script | Manual, once | 4 seller accounts (alice, bob, carlos, diana) + 13 listings | `scripts/seed.py` |
 
-The login accounts (`user`, `admin`) are always created fresh on container start.
+The `admin` account is always created fresh on container start.
 The demo seller accounts and listings persist in the database until truncated.
 
 **Running the demo seed:**
@@ -155,7 +155,7 @@ Moderation is async -- allow 5-10 minutes for all 13 listings to clear the pipel
 
 If you need to start fresh, truncate all tables via the platform postgres container,
 then restart the app before reseeding. The restart is required to recreate the
-`user` and `admin` login accounts -- truncating the `users` table removes them.
+`admin` account -- truncating the `users` table removes it.
 
 ```bash
 # 1. Truncate all watcher data
@@ -163,7 +163,7 @@ DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
 podman exec postgres env PGPASSWORD="$DB_PASS" psql -U watcher -d watcher \
   -c "TRUNCATE watcher.listing_publish_log, watcher.human_review_queue, watcher.listing_moderation, watcher.listing_images, watcher.listings, watcher.users RESTART IDENTITY CASCADE;"
 
-# 2. Restart the app to recreate user and admin accounts
+# 2. Restart the app to recreate the admin account
 cd /path/to/aixcl
 ./aixcl app stop watcher
 ./aixcl app start watcher

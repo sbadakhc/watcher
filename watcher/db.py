@@ -398,29 +398,17 @@ def seed_users() -> None:
     from pathlib import Path
     from auth import hash_password
 
-    user_pass = ""
     admin_pass = ""
-    user_path = Path("/run/secrets/watcher-user-password")
     admin_path = Path("/run/secrets/watcher-admin-password")
-    if user_path.exists():
-        user_pass = user_path.read_text().strip()
     if admin_path.exists():
         admin_pass = admin_path.read_text().strip()
 
-    if not user_pass or not admin_pass:
-        logger.warning("User/admin password secrets not found — skipping seed.")
+    if not admin_pass:
+        logger.warning("Admin password secret not found — skipping seed.")
         return
 
     with _get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO watcher.users (username, email, password_hash, is_admin)
-                VALUES ('user', 'user@test.com', %s, FALSE)
-                ON CONFLICT (username) DO NOTHING
-                """,
-                (hash_password(user_pass),),
-            )
             cur.execute(
                 """
                 INSERT INTO watcher.users (username, email, password_hash, is_admin)
@@ -429,7 +417,7 @@ def seed_users() -> None:
                 """,
                 (hash_password(admin_pass),),
             )
-    logger.info("User accounts seeded (user, admin).")
+    logger.info("Admin account seeded.")
 
 
 def get_published_listings(limit: int = 3) -> List[dict]:
