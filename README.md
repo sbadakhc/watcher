@@ -148,22 +148,41 @@ commands:
   status  show pipeline and database state
 ```
 
-**Running the demo seed:**
+**How to run the script:**
 
-Copy the script into the container and run the `demo` subcommand:
+The script requires dependencies (`psycopg2`, `httpx`, `pillow`) that are only installed inside the watcher container.
+You must copy the script in before each run if you have edited it locally.
 
 ```bash
+# Step 1 -- copy script into container (repeat after any local edits)
+podman cp scripts/seed.py watcher-moderation:/tmp/seed.py
+
+# Step 2 -- read secrets from container
 DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
 USER_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-user-password)
-podman cp scripts/seed.py watcher-moderation:/tmp/seed.py
-podman exec watcher-moderation python3 /tmp/seed.py \
-  --db-password "$DB_PASS" demo \
-  --user-password "$USER_PASS"
+
+# Step 3 -- run a subcommand
+podman exec watcher-moderation python3 /tmp/seed.py --db-password "$DB_PASS" <command> [options]
 ```
 
-Poll until all 50 listings clear the pipeline:
+**Subcommand reference:**
+
+| Command | What it does |
+|---------|--------------|
+| `status` | Show pipeline stats and per-seller DB breakdown |
+| `status --poll` | Refresh every 10s until the review queue drains |
+| `demo --user-password "$USER_PASS"` | Seed 50 listings, wait 30s then print stats |
+| `demo --user-password "$USER_PASS" --poll` | Seed and poll until all listings are moderated |
+| `demo --user-password "$USER_PASS" --reset --poll` | Clear listings, reseed, and poll |
+| `reset --yes` | Truncate listing data only (admin and sellers preserved) |
+| `reset --full --yes` | Truncate everything including users |
+
+**Running the demo seed:**
 
 ```bash
+podman cp scripts/seed.py watcher-moderation:/tmp/seed.py
+DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
+USER_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-user-password)
 podman exec watcher-moderation python3 /tmp/seed.py \
   --db-password "$DB_PASS" demo \
   --user-password "$USER_PASS" --poll
@@ -179,13 +198,6 @@ podman exec watcher-moderation python3 /tmp/seed.py \
   --db-password "$DB_PASS" status
 ```
 
-Poll until the review queue drains:
-
-```bash
-podman exec watcher-moderation python3 /tmp/seed.py \
-  --db-password "$DB_PASS" status --poll
-```
-
 **Resetting and reseeding:**
 
 To clear only listing data (sellers and admin preserved -- no restart needed):
@@ -193,25 +205,32 @@ To clear only listing data (sellers and admin preserved -- no restart needed):
 ```bash
 podman exec watcher-moderation python3 /tmp/seed.py \
   --db-password "$DB_PASS" reset --yes
+
+podman exec watcher-moderation python3 /tmp/seed.py \
+  --db-password "$DB_PASS" demo --user-password "$USER_PASS" --poll
+```
+
+Or reset and reseed in one command:
+
+```bash
+podman exec watcher-moderation python3 /tmp/seed.py \
+  --db-password "$DB_PASS" demo --user-password "$USER_PASS" --reset --poll
 ```
 
 To start completely fresh (truncates users too -- restart required to recreate admin):
 
 ```bash
-# 1. Truncate everything
+# 1. Truncate everything including user accounts
 podman exec watcher-moderation python3 /tmp/seed.py \
   --db-password "$DB_PASS" reset --full --yes
 
-# 2. Restart to recreate admin account
+# 2. Restart to recreate the admin account
 ./aixcl app stop watcher && ./aixcl app start watcher
 
 # 3. Reseed
 podman exec watcher-moderation python3 /tmp/seed.py \
-  --db-password "$DB_PASS" demo \
-  --user-password "$USER_PASS" --reset --poll
+  --db-password "$DB_PASS" demo --user-password "$USER_PASS" --poll
 ```
-
-Tip: `demo --reset` chains both steps in one command when only listing data needs clearing.
 
 ### 4. Review Queue
 
