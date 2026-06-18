@@ -1508,48 +1508,191 @@ def submit_listing(api: str, seller: str, title: str,
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Database helpers
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Seed watcher with demo listings")
-    ap.add_argument("--api",           default="http://localhost:9104")
-    ap.add_argument("--db-host",       default="localhost")
-    ap.add_argument("--db-port",       type=int, default=5432)
-    ap.add_argument("--db-name",       default="watcher")
-    ap.add_argument("--db-user",       default="watcher")
-    ap.add_argument("--db-password",   required=True)
-    ap.add_argument("--user-password", required=True,
-                    help="Password all seller accounts will share")
-    ap.add_argument("--delay",         type=float, default=0.5,
-                    help="Seconds between submissions (default: 0.5)")
-    ap.add_argument("--wait",          type=int, default=30,
-                    help="Seconds to wait for background moderation (default: 30)")
-    args = ap.parse_args()
+def _get_db_conn(args: argparse.Namespace):
+    return psycopg2.connect(
+        host=args.db_host, port=args.db_port,
+        dbname=args.db_name, user=args.db_user,
+        password=args.db_password,
+    )
 
+
+def _truncate_listings(conn) -> None:
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                TRUNCATE watcher.listing_publish_log,
+                         watcher.human_review_queue,
+                         watcher.listing_moderation,
+                         watcher.listing_images,
+                         watcher.listings
+                RESTART IDENTITY CASCADE
+            """)
+
+
+def _truncate_all(conn) -> None:
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                TRUNCATE watcher.listing_publish_log,
+                         watcher.human_review_queue,
+                         watcher.listing_moderation,
+                         watcher.listing_images,
+                         watcher.listings,
+                         watcher.users
+                RESTART IDENTITY CASCADE
+            """)
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_reset(args: argparse.Namespace) -> None:
+    print("\nWatcher Reset")
+    print("=" * 60)
+    scope = "ALL data including user accounts" if args.full else "listing data (users preserved)"
+    if not args.yes:
+        confirm = input(f"\n  Truncate {scope}. Continue? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("  Aborted.")
+            return
+    conn = _get_db_conn(args)
+    try:
+        if args.full:
+            _truncate_all(conn)
+            print("  [x] All tables truncated (listings + users)")
+            print("\n  Restart the app to recreate the admin account:")
+            print("    ./aixcl app stop watcher && ./aixcl app start watcher")
+        else:
+            _truncate_listings(conn)
+            print("  [x] Listing data truncated (users preserved)")
+    finally:
+        conn.close()
+    print(f"\n{'=' * 60}")
+    print("Done. Run 'seed.py demo' to reseed.")
+
+
+def cmd_status(args: argparse.Namespace) -> None:
+    print("\nWatcher Status")
+    print("=" * 60)
+    try:
+        with httpx.Client(base_url=args.api, timeout=10) as client:
+            stats = client.get("/api/stats").json()
+            health = client.get("/api/health/models").json()
+    except Exception as e:
+        print(f"  ERROR: cannot reach API at {args.api}: {e}")
+        sys.exit(1)
+
+    tm = health.get("text_model", {})
+    vm = health.get("vision_model", {})
+    print(f"\n  API     : {args.api}  [{health.get('status', '?')}]")
+    print(f"  text    : {tm.get('name', '?')}  ({'ok' if tm.get('available') else 'MISSING'})")
+    print(f"  vision  : {vm.get('name', '?')}  ({'ok' if vm.get('available') else 'MISSING'})")
+    print(f"\n  Pipeline")
+    print(f"    moderated      : {stats.get('total_moderated', 0)}")
+    print(f"    auto-approved  : {stats.get('auto_approved', 0)}")
+    print(f"    auto-rejected  : {stats.get('auto_rejected', 0)}")
+    print(f"    sent to review : {stats.get('sent_to_review', 0)}")
+    print(f"    queue depth    : {stats.get('queue_depth', 0)}")
+    print(f"    avg latency    : {stats.get('avg_latency_seconds', 0):.1f}s")
+
+    try:
+        conn = _get_db_conn(args)
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM watcher.users WHERE is_admin = FALSE")
+            sellers = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM watcher.users WHERE is_admin = TRUE")
+            admins = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM watcher.listings")
+            total = cur.fetchone()[0]
+            cur.execute("SELECT status, COUNT(*) FROM watcher.listings GROUP BY status ORDER BY status")
+            by_status = cur.fetchall()
+            cur.execute("""
+                SELECT u.username,
+                       COUNT(l.id)                                                AS total,
+                       SUM(CASE WHEN l.status = 'published'  THEN 1 ELSE 0 END)  AS approved,
+                       SUM(CASE WHEN l.status = 'rejected'   THEN 1 ELSE 0 END)  AS rejected,
+                       SUM(CASE WHEN l.status NOT IN ('published','rejected')
+                                THEN 1 ELSE 0 END)                                AS pending
+                FROM watcher.users u
+                LEFT JOIN watcher.listings l ON l.user_id = u.id
+                WHERE u.is_admin = FALSE
+                GROUP BY u.username
+                ORDER BY total DESC NULLS LAST
+            """)
+            seller_rows = cur.fetchall()
+        conn.close()
+        print(f"\n  Database")
+        print(f"    admins  : {admins}   sellers: {sellers}   listings: {total}")
+        for status, count in by_status:
+            print(f"    {status:12s}: {count}")
+        if seller_rows:
+            print(f"\n  Sellers")
+            print(f"    {'username':12s}  {'total':>5}  {'approved':>8}  {'rejected':>8}  {'pending':>7}")
+            print(f"    {'-'*12}  {'-----':>5}  {'--------':>8}  {'--------':>8}  {'-------':>7}")
+            for username, tot, approved, rejected, pending in seller_rows:
+                print(f"    {username:12s}  {tot or 0:>5}  {approved or 0:>8}  {rejected or 0:>8}  {pending or 0:>7}")
+    except Exception as e:
+        print(f"\n  DB breakdown unavailable: {e}")
+
+    if args.poll:
+        print(f"\n  Polling every {args.interval}s until queue drains (Ctrl-C to stop)...")
+        try:
+            while True:
+                time.sleep(args.interval)
+                with httpx.Client(base_url=args.api, timeout=10) as client:
+                    s = client.get("/api/stats").json()
+                depth = s.get("queue_depth", 0)
+                mod = s.get("total_moderated", 0)
+                print(f"    moderated: {mod}  queue: {depth}", end="\r")
+                if depth == 0:
+                    print()
+                    print("  Queue empty.")
+                    break
+        except KeyboardInterrupt:
+            print()
+
+    print(f"\n{'=' * 60}")
+
+
+def cmd_demo(args: argparse.Namespace) -> None:
     print("\nWatcher Demo Seed")
     print("=" * 60)
 
     if IMAGE_DIR.exists():
-        real_count = sum(1 for k in _DRAW_FNS if any((IMAGE_DIR / f"{k}{e}").exists() for e in (".jpg", ".jpeg", ".png", ".webp")))
-        print(f"\n  Image directory: {IMAGE_DIR}")
-        print(f"  Real images found: {real_count}/{len(_DRAW_FNS)}")
-        if real_count < len(_DRAW_FNS):
-            print(f"  Missing keys will use generated product cards.")
+        real_count = sum(
+            1 for k in set(key for *_, key in LISTINGS)
+            if any((IMAGE_DIR / f"{k}{e}").exists() for e in (".jpg", ".jpeg", ".png", ".webp"))
+        )
+        unique_keys = len(set(key for *_, key in LISTINGS))
+        print(f"\n  Image directory : {IMAGE_DIR}")
+        print(f"  Real images     : {real_count}/{unique_keys} keys")
     else:
-        print(f"\n  No scripts/images/ directory found -- using generated product cards.")
-        print(f"  Drop real images (e.g. iphone.jpg) into scripts/images/ to upgrade.")
+        print(f"\n  No scripts/images/ -- using generated product cards.")
+        print(f"  Drop <key>.jpg into scripts/images/ to use real photos.")
 
-    # 1. Create seller accounts
-    print("\n[1/3] Creating seller accounts...")
+    if args.reset:
+        print("\n[0] Resetting listing data...")
+        conn = _get_db_conn(args)
+        try:
+            _truncate_listings(conn)
+            print("  [x] Listing data cleared")
+        finally:
+            conn.close()
+
+    step = 1
+    print(f"\n[{step}/3] Creating seller accounts...")
+    step += 1
     try:
         create_sellers(
             sellers=SELLERS,
-            db_host=args.db_host,
-            db_port=args.db_port,
-            db_name=args.db_name,
-            db_user=args.db_user,
+            db_host=args.db_host, db_port=args.db_port,
+            db_name=args.db_name, db_user=args.db_user,
             db_password=args.db_password,
             user_password=args.user_password,
         )
@@ -1557,54 +1700,142 @@ def main() -> None:
         print(f"  ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 2. Submit listings
-    print(f"\n[2/3] Submitting {len(LISTINGS)} listings (moderation is async)...")
+    print(f"\n[{step}/3] Submitting {len(LISTINGS)} listings...")
+    step += 1
     submitted, errors = [], 0
     for seller, title, category, description, price, expected, image_key in LISTINGS:
         listing_id = submit_listing(
-            api=args.api,
-            seller=seller,
-            title=title,
-            category=category,
-            description=description,
-            price=price,
-            image_key=image_key,
+            api=args.api, seller=seller, title=title,
+            category=category, description=description,
+            price=price, image_key=image_key,
         )
         if listing_id:
             submitted.append((listing_id, title, expected))
-            src = "real img" if _load_real_image(image_key) else "generated"
-            print(f"    queued  {title[:46]:<46}  [{src}]  (expected {expected})")
+            src = "real" if _load_real_image(image_key) else "card"
+            print(f"    queued  {title[:44]:<44}  [{src}]  (expected {expected})")
         else:
             errors += 1
         if args.delay > 0:
             time.sleep(args.delay)
 
-    # 3. Wait then print stats
-    if submitted and args.wait > 0:
-        print(f"\n[3/3] Waiting {args.wait}s for Ollama moderation to complete...")
-        time.sleep(args.wait)
+    print(f"\n[{step}/3] Waiting for moderation...")
+    if submitted:
+        if args.poll:
+            deadline = time.time() + args.timeout
+            while time.time() < deadline:
+                try:
+                    with httpx.Client(base_url=args.api, timeout=10) as client:
+                        s = client.get("/api/stats").json()
+                    mod = s.get("total_moderated", 0)
+                    print(f"    {mod}/{len(submitted)} moderated  "
+                          f"(approved:{s.get('auto_approved',0)}  "
+                          f"rejected:{s.get('auto_rejected',0)}  "
+                          f"review:{s.get('queue_depth',0)})", end="\r")
+                    if mod >= len(submitted):
+                        print()
+                        break
+                except Exception:
+                    pass
+                time.sleep(args.interval)
+            else:
+                print(f"\n  Timeout after {args.timeout}s -- moderation still running.")
+        elif args.wait > 0:
+            print(f"  Waiting {args.wait}s...")
+            time.sleep(args.wait)
 
         try:
             with httpx.Client(base_url=args.api, timeout=10) as client:
-                r = client.get("/api/stats")
-                if r.status_code == 200:
-                    s = r.json()
-                    print(f"\n  Stats from /api/stats:")
-                    print(f"    total moderated  : {s.get('total_moderated', 0)}")
-                    print(f"    auto approved    : {s.get('auto_approved', 0)}")
-                    print(f"    auto rejected    : {s.get('auto_rejected', 0)}")
-                    print(f"    sent to review   : {s.get('sent_to_review', 0)}")
-                    print(f"    queue depth      : {s.get('queue_depth', 0)}")
+                s = client.get("/api/stats").json()
+            print(f"\n  Stats:")
+            print(f"    moderated      : {s.get('total_moderated', 0)}")
+            print(f"    auto-approved  : {s.get('auto_approved', 0)}")
+            print(f"    auto-rejected  : {s.get('auto_rejected', 0)}")
+            print(f"    sent to review : {s.get('sent_to_review', 0)}")
+            print(f"    queue depth    : {s.get('queue_depth', 0)}")
+            print(f"    avg latency    : {s.get('avg_latency_seconds', 0):.1f}s")
         except Exception as e:
             print(f"  (could not fetch stats: {e})")
 
     print(f"\n{'=' * 60}")
-    print(f"Done. {len(submitted)}/{len(LISTINGS)} listings submitted, {errors} error(s).")
+    print(f"Done. {len(submitted)}/{len(LISTINGS)} submitted, {errors} error(s).")
     print(f"  Storefront  : {args.api}/")
-    print(f"  Review queue: {args.api}/#/review  (log in as admin)")
+    print(f"  Review queue: {args.api}/#/review")
     print(f"  Dashboard   : {args.api}/#/dashboard")
     if errors:
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Watcher demo seed and management CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+subcommands:
+  demo    seed the curated 50-listing demo dataset
+  reset   truncate watcher data (listings only, or full including users)
+  status  show pipeline and database state
+
+examples:
+  seed.py --db-password $DB reset --yes
+  seed.py --db-password $DB demo --user-password $UP --reset --poll
+  seed.py --db-password $DB status --poll
+""",
+    )
+    parser.add_argument("--api",         default="http://localhost:9104")
+    parser.add_argument("--db-host",     default="localhost")
+    parser.add_argument("--db-port",     type=int, default=5432)
+    parser.add_argument("--db-name",     default="watcher")
+    parser.add_argument("--db-user",     default="watcher")
+    parser.add_argument("--db-password", required=True,
+                        help="DB password (./aixcl app secrets watcher)")
+
+    sub = parser.add_subparsers(dest="command", metavar="command")
+    sub.required = True
+
+    # -- demo -----------------------------------------------------------------
+    p_demo = sub.add_parser("demo", help="Seed the curated 50-listing demo")
+    p_demo.add_argument("--user-password", required=True,
+                        help="Seller account password (watcher-user-password)")
+    p_demo.add_argument("--reset",    action="store_true",
+                        help="Truncate listing data before seeding")
+    p_demo.add_argument("--delay",    type=float, default=0.5,
+                        help="Seconds between submissions (default: 0.5)")
+    p_demo.add_argument("--wait",     type=int,   default=30,
+                        help="Seconds to wait after submitting (default: 30)")
+    p_demo.add_argument("--poll",     action="store_true",
+                        help="Poll until all listings are moderated (ignores --wait)")
+    p_demo.add_argument("--interval", type=int,   default=15,
+                        help="Poll interval in seconds (default: 15)")
+    p_demo.add_argument("--timeout",  type=int,   default=1800,
+                        help="Max poll time in seconds (default: 1800)")
+
+    # -- reset ----------------------------------------------------------------
+    p_reset = sub.add_parser("reset", help="Truncate watcher data")
+    p_reset.add_argument("--full", action="store_true",
+                         help="Also truncate users (restart app after to recreate admin)")
+    p_reset.add_argument("--yes",  action="store_true",
+                         help="Skip confirmation prompt")
+
+    # -- status ---------------------------------------------------------------
+    p_status = sub.add_parser("status", help="Report pipeline and database state")
+    p_status.add_argument("--poll",     action="store_true",
+                          help="Keep refreshing until queue depth reaches zero")
+    p_status.add_argument("--interval", type=int, default=10,
+                          help="Refresh interval in seconds (default: 10)")
+
+    args = parser.parse_args()
+
+    if args.command == "demo":
+        cmd_demo(args)
+    elif args.command == "reset":
+        cmd_reset(args)
+    elif args.command == "status":
+        cmd_status(args)
 
 
 if __name__ == "__main__":
