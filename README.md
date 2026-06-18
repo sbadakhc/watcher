@@ -1,6 +1,6 @@
-# Watcher - AI-Powered Marketplace Moderation
+# Watcher - Agentic Marketplace Moderation
 
-AI-assisted listing moderation for e-commerce platforms. Built for the AIXCL BYO app framework.
+Agentic listing moderation for e-commerce platforms. Built using the AIXCL BYO app framework.
 
 ## Overview
 
