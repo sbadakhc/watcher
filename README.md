@@ -127,8 +127,17 @@ http://localhost:9104
 
 ### 3. Seed Demo Data
 
-The seed script creates 4 seller accounts with realistic account histories and
-submits 13 listings that exercise all three pipeline outcomes.
+There are two distinct seeding layers:
+
+| Layer | When | What it creates | How |
+|-------|------|-----------------|-----|
+| App startup seeding | Every container start | `user` and `admin` login accounts (passwords from Vault secrets) | Automatic -- runs in `main.py` on startup |
+| Demo seed script | Manual, once | 4 seller accounts (alice, bob, carlos, diana) + 13 listings | `scripts/seed.py` |
+
+The login accounts (`user`, `admin`) are always created fresh on container start.
+The demo seller accounts and listings persist in the database until truncated.
+
+**Running the demo seed:**
 
 ```bash
 DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
@@ -140,6 +149,33 @@ podman exec watcher-moderation python3 /tmp/seed.py \
 ```
 
 Expected outcome: ~7 auto-approved, ~3 auto-rejected, ~3 to human review queue.
+Moderation is async -- allow 5-10 minutes for all 13 listings to clear the pipeline.
+
+**Resetting and reseeding:**
+
+If you need to start fresh, truncate all tables via the platform postgres container,
+then restart the app before reseeding. The restart is required to recreate the
+`user` and `admin` login accounts -- truncating the `users` table removes them.
+
+```bash
+# 1. Truncate all watcher data
+DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
+podman exec postgres env PGPASSWORD="$DB_PASS" psql -U watcher -d watcher \
+  -c "TRUNCATE watcher.listing_publish_log, watcher.human_review_queue, watcher.listing_moderation, watcher.listing_images, watcher.listings, watcher.users RESTART IDENTITY CASCADE;"
+
+# 2. Restart the app to recreate user and admin accounts
+cd /path/to/aixcl
+./aixcl app stop watcher
+./aixcl app start watcher
+
+# 3. Reseed demo data
+DB_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-db-password)
+USER_PASS=$(podman exec watcher-moderation cat /run/secrets/watcher-user-password)
+podman cp scripts/seed.py watcher-moderation:/tmp/seed.py
+podman exec watcher-moderation python3 /tmp/seed.py \
+  --db-password "$DB_PASS" \
+  --user-password "$USER_PASS"
+```
 
 ### 4. Review Queue
 
