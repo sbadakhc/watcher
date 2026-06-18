@@ -70,6 +70,13 @@ SELLERS = [
         "account_age_days": 90,
         "note": "Known policy violator",
     },
+    {
+        "username": "eve",
+        "email": "eve@example.com",
+        "violations": 0,
+        "account_age_days": 45,
+        "note": "Brand new seller, no history",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -77,153 +84,312 @@ SELLERS = [
 # ---------------------------------------------------------------------------
 
 LISTINGS = [
-    # --- Clean approvals ---
-    (
-        "alice",
-        "iPhone 14 Pro 256GB Space Black",
-        "Electronics",
-        "Selling my iPhone 14 Pro in excellent condition. Screen protector applied from day one, no scratches. "
-        "Battery health 97%. Comes with original box, charger, and unused EarPods. "
-        "Unlocked, works with any carrier. Upgraded to iPhone 15, hence selling.",
-        749.00,
-        "APPROVE",
-        "iphone",
-    ),
-    (
-        "alice",
-        "Vintage Levis 501 Jeans Size 32x30",
-        "Clothing",
-        "Classic Levi's 501 straight fit jeans in dark indigo wash. Barely worn, excellent condition. "
-        "Size 32 waist, 30 inseam. Original shrink-to-fit 100% cotton version. "
-        "No rips, no fading. Great addition to any wardrobe.",
-        45.00,
-        "APPROVE",
-        "jeans",
-    ),
-    (
-        "bob",
-        "KitchenAid Stand Mixer 5 Qt Artisan",
-        "Home",
-        "KitchenAid Artisan 5-quart stand mixer in Empire Red. Used for about a year, works perfectly. "
-        "Comes with all original attachments: flat beater, dough hook, wire whip, and pouring shield. "
-        "Moving abroad and cannot take it with me. Original retail $450.",
-        220.00,
-        "APPROVE",
-        "mixer",
-    ),
-    (
-        "bob",
-        "Trek FX 3 Disc Hybrid Bike 2022",
-        "Vehicles",
-        "Trek FX 3 Disc hybrid bike, 2022 model, size Medium. Used for commuting, approximately 500 miles. "
-        "Hydraulic disc brakes, Shimano Altus drivetrain, puncture-resistant tyres. "
-        "Serviced 2 months ago. Selling because I moved closer to work.",
-        580.00,
-        "APPROVE",
-        "bike",
-    ),
-    (
-        "alice",
-        "Sony WH-1000XM5 Wireless Headphones",
-        "Electronics",
-        "Sony WH-1000XM5 noise cancelling headphones. Purchased 6 months ago, in perfect condition. "
-        "Comes with original carry case, USB-C cable, and 3.5mm audio cable. "
-        "Industry-leading noise cancellation, 30-hour battery life. No scratches or marks.",
-        249.00,
-        "APPROVE",
-        "headphones",
-    ),
-    # --- Borderline / REVIEW ---
-    (
-        "carlos",
-        "Phone Unlocking Service All Networks",
-        "Services",
-        "Professional phone unlocking service for all major carriers. Remote unlock within 24 hours. "
-        "Works for iPhone and Android. Permanent unlock, no software required. "
-        "Over 500 satisfied customers. Contact me with your IMEI number.",
-        35.00,
-        "REVIEW",
-        "phone-unlock",
-    ),
-    (
-        "carlos",
-        "Vintage Military Surplus Jacket US Army M65",
-        "Clothing",
-        "Authentic US Army M65 field jacket from 1970s military surplus. "
-        "Olive drab, size Large Regular. Some wear consistent with age, all buttons intact. "
-        "Collector item, not reproduction. Great for outdoor activities.",
-        85.00,
-        "REVIEW",
-        "army-jacket",
-    ),
-    (
-        "carlos",
-        "Chemistry Set Advanced Home Lab Kit",
-        "Other",
-        "Advanced chemistry set for serious hobbyists and home experimenters. "
-        "Includes 40+ reagents, glassware, and instruction manual. "
-        "Everything you need for titration, crystallisation, and organic synthesis experiments. "
-        "Suitable for adults only.",
-        120.00,
-        "REVIEW",
-        "chemistry-set",
-    ),
-    (
-        "bob",
-        "Lockpick Set Professional Grade",
-        "Other",
-        "Professional lockpick set with 24 picks and 4 tension wrenches. "
-        "Stainless steel, lifetime warranty. Used by locksmiths and security professionals. "
-        "Legal in most jurisdictions. Includes carrying case.",
-        55.00,
-        "REVIEW",
-        "lockpick",
-    ),
-    # --- Clear violations / REJECT ---
-    (
-        "diana",
-        "Louis Vuitton Neverfull MM Brand New",
-        "Clothing",
-        "Brand new Louis Vuitton Neverfull MM tote bag. Monogram canvas with beige interior. "
-        "Gold hardware. Comes with dust bag. Beautiful bag, perfect condition. "
-        "Originally purchased from a supplier in Guangzhou. Great quality.",
-        180.00,
-        "REJECT",
-        "fake-bag",
-    ),
-    (
-        "diana",
-        "Tramadol 50mg 100 Tablets No Prescription",
-        "Other",
-        "Selling unopened pack of Tramadol 50mg tablets, 100 count. "
-        "Prescription not required for purchase. Fast discreet shipping. "
-        "Contact me for bulk pricing. Multiple packs available.",
-        60.00,
-        "REJECT",
-        "prescription-drugs",
-    ),
-    (
-        "diana",
-        "Stun Gun 1 Million Volt Self Defence",
-        "Other",
-        "High voltage stun gun for personal protection. 1 million volt output. "
-        "Rechargeable battery, LED flashlight included. Compact design fits in pocket. "
-        "Shipping available to all locations. No questions asked.",
-        45.00,
-        "REJECT",
-        "stun-gun",
-    ),
-    (
-        "diana",
-        "Get 10000 Instagram Followers Guaranteed",
-        "Services",
-        "Boost your Instagram instantly! 10,000 real-looking followers delivered within 48 hours. "
-        "100% guaranteed or money back. Our bot network ensures rapid growth. "
-        "Safe, permanent, and undetectable. DM for bulk packages.",
-        25.00,
-        "REJECT",
-        "fake-followers",
-    ),
+    # -----------------------------------------------------------------------
+    # Clean approvals (30 listings)
+    # -----------------------------------------------------------------------
+    ("alice", "iPhone 14 Pro 256GB Space Black", "Electronics",
+     "Selling my iPhone 14 Pro in excellent condition. Screen protector applied from day one, no scratches. "
+     "Battery health 97%. Comes with original box, charger, and unused EarPods. "
+     "Unlocked, works with any carrier. Upgraded to iPhone 15, hence selling.",
+     749.00, "APPROVE", "iphone"),
+
+    ("alice", "Vintage Levis 501 Jeans Size 32x30", "Clothing",
+     "Classic Levi's 501 straight fit jeans in dark indigo wash. Barely worn, excellent condition. "
+     "Size 32 waist, 30 inseam. Original shrink-to-fit 100% cotton version. No rips, no fading.",
+     45.00, "APPROVE", "jeans"),
+
+    ("bob", "KitchenAid Stand Mixer 5 Qt Artisan", "Home",
+     "KitchenAid Artisan 5-quart stand mixer in Empire Red. Used for about a year, works perfectly. "
+     "Comes with all original attachments: flat beater, dough hook, wire whip, and pouring shield. "
+     "Moving abroad and cannot take it with me. Original retail $450.",
+     220.00, "APPROVE", "mixer"),
+
+    ("bob", "Trek FX 3 Disc Hybrid Bike 2022", "Vehicles",
+     "Trek FX 3 Disc hybrid bike, 2022 model, size Medium. Used for commuting, approximately 500 miles. "
+     "Hydraulic disc brakes, Shimano Altus drivetrain, puncture-resistant tyres. Serviced 2 months ago.",
+     580.00, "APPROVE", "bike"),
+
+    ("alice", "Sony WH-1000XM5 Wireless Headphones", "Electronics",
+     "Sony WH-1000XM5 noise cancelling headphones. Purchased 6 months ago, in perfect condition. "
+     "Comes with original carry case, USB-C cable, and 3.5mm audio cable. 30-hour battery life.",
+     249.00, "APPROVE", "headphones"),
+
+    ("alice", "MacBook Pro 14 M3 Pro 18GB 512GB Space Black", "Electronics",
+     "MacBook Pro 14-inch with M3 Pro chip, 18GB unified memory, 512GB SSD. "
+     "Purchased January 2024, used lightly for development work. Battery cycles under 50. "
+     "Comes with 96W USB-C charger and original box. No scratches, immaculate condition.",
+     1799.00, "APPROVE", "laptop"),
+
+    ("bob", "PlayStation 5 Disc Edition 1TB", "Electronics",
+     "Sony PlayStation 5 disc edition console. Purchased at launch, excellent condition. "
+     "Includes original DualSense controller, HDMI cable, and power cord. "
+     "No disc drive issues, runs quietly. Upgrading to PS5 Pro.",
+     380.00, "APPROVE", "console"),
+
+    ("alice", "DJI Mini 3 Pro Fly More Combo", "Electronics",
+     "DJI Mini 3 Pro drone with Fly More Combo. Under 250g, no licence required in the UK. "
+     "4K/60fps video, obstacle avoidance, 34-min flight time. Under 5 hours total flight time. "
+     "Comes with 3 batteries, charging hub, carrying bag, and ND filter set.",
+     649.00, "APPROVE", "drone"),
+
+    ("bob", "Herman Miller Aeron Chair Size B Graphite", "Home",
+     "Herman Miller Aeron in graphite, size B (medium). PostureFit SL lumbar support. "
+     "Purchased 2021, used daily in home office. All adjustments work perfectly. "
+     "No tears, no broken parts. Retail $1,495. Downsizing office.",
+     650.00, "APPROVE", "chair"),
+
+    ("carlos", "Fender Player Stratocaster Electric Guitar", "Other",
+     "Fender Player Series Stratocaster in Polar White with maple neck. "
+     "Purchased 2022, played at home, no gigging. Frets have plenty of life. "
+     "Comes with Fender gig bag and strap. Slight buckle rash on back, pictured.",
+     449.00, "APPROVE", "guitar"),
+
+    ("alice", "Canon EOS R50 Mirrorless Camera Body", "Electronics",
+     "Canon EOS R50 mirrorless camera body, purchased March 2024. "
+     "Approximately 1,200 shutter actuations. Compact APS-C sensor, 4K video. "
+     "Comes with original box, battery, charger, and body cap. Perfect condition.",
+     499.00, "APPROVE", "camera"),
+
+    ("bob", "Garmin Fenix 7 Solar Sapphire GPS Watch", "Electronics",
+     "Garmin Fenix 7 Solar Sapphire edition. Titanium bezel with sapphire crystal lens. "
+     "Solar charging, 18-day battery life, full multisport tracking. "
+     "Purchased June 2023, lightly used for cycling and hiking. Original box and charger included.",
+     549.00, "APPROVE", "smartwatch"),
+
+    ("alice", "Patagonia Down Sweater Jacket Size XL Navy", "Clothing",
+     "Patagonia Down Sweater in Classic Navy, size XL. 800-fill-power traceable down. "
+     "Worn one season, excellent condition. No damage, no pilling. "
+     "Stuffs into chest pocket. Great layering piece for hiking or travel.",
+     149.00, "APPROVE", "winter-jacket"),
+
+    ("bob", "Nike Air Force 1 Low White Size UK 10", "Clothing",
+     "Nike Air Force 1 Low all-white, UK size 10. Worn twice, effectively new. "
+     "No creasing, no yellowing on soles. Original box included. "
+     "Bought in error, too large for me. Authentic Nike, purchased from JD Sports.",
+     75.00, "APPROVE", "trainers"),
+
+    ("alice", "Dyson V15 Detect Absolute Cordless Vacuum", "Home",
+     "Dyson V15 Detect Absolute. Laser dust detection, 60-min runtime, HEPA filtration. "
+     "Purchased April 2023, used weekly. All attachments included. "
+     "No loss of suction. Comes with wall dock and original accessories.",
+     349.00, "APPROVE", "vacuum"),
+
+    ("bob", "De'Longhi Magnifica Evo Coffee Machine", "Home",
+     "De'Longhi Magnifica Evo automatic bean-to-cup espresso machine. "
+     "Integrated grinder, adjustable strength and temperature. Used daily for 18 months. "
+     "Recently descaled and serviced. Produces excellent espresso and lungo.",
+     299.00, "APPROVE", "coffee-machine"),
+
+    ("alice", "Apple AirPods Pro 2nd Gen MagSafe USB-C", "Electronics",
+     "Apple AirPods Pro 2nd generation with MagSafe USB-C charging case. "
+     "Purchased October 2023, used lightly. Battery health above 95% on all three units. "
+     "Active noise cancellation and transparency mode work perfectly. Original box.",
+     189.00, "APPROVE", "earbuds"),
+
+    ("bob", "iPad Pro 12.9 M2 256GB Space Grey WiFi", "Electronics",
+     "iPad Pro 12.9-inch M2 chip, 256GB, Space Grey, WiFi model. "
+     "Purchased February 2023. Screen is pristine with Paperlike screen protector applied. "
+     "Comes with USB-C cable and Apple 20W charger. No dents or scratches.",
+     699.00, "APPROVE", "tablet"),
+
+    ("carlos", "Weber Kettle Premium BBQ 57cm Black", "Home",
+     "Weber Kettle Premium charcoal BBQ, 57cm diameter, black. "
+     "Two seasons old, cleaned after each use. Porcelain-enamelled bowl and lid, no rust. "
+     "Comes with grill tools and charcoal chimney starter. Selling as moving to gas.",
+     159.00, "APPROVE", "bbq"),
+
+    ("carlos", "Coleman 4-Person Instant Tent", "Other",
+     "Coleman Sundome 4-person camping tent. Pre-attached poles for setup in under 2 minutes. "
+     "Used on three camping trips, no rips or broken poles. Seams are watertight. "
+     "Comes with carry bag and ground stakes.",
+     79.00, "APPROVE", "tent"),
+
+    ("alice", "Specialized Allez Road Bike 54cm 2021", "Vehicles",
+     "Specialized Allez entry-level road bike, 54cm frame, 2021 model. "
+     "Shimano Claris 2x8 groupset, double-butted aluminium frame. "
+     "Approximately 800 miles. Tyres replaced last month. Great first road bike.",
+     599.00, "APPROVE", "road-bike"),
+
+    ("bob", "Bose SoundLink Revolve+ Portable Speaker", "Electronics",
+     "Bose SoundLink Revolve+ II portable Bluetooth speaker in silver. "
+     "360-degree sound, IPX4 water resistant, 17-hour battery life. "
+     "Purchased August 2023. No scratches. Comes with charging cradle and soft carry case.",
+     199.00, "APPROVE", "speaker"),
+
+    ("alice", "Nintendo Switch OLED White 2023", "Electronics",
+     "Nintendo Switch OLED model in white. Purchased as gift, barely used. "
+     "7-inch OLED screen with vivid colours. Comes with dock, Joy-Cons, HDMI, and power adapter. "
+     "No dead pixels, no stick drift. Original box.",
+     249.00, "APPROVE", "console"),
+
+    ("bob", "Vitamix E310 Explorian Blender", "Home",
+     "Vitamix E310 Explorian blender in black. 2.0 HP motor, 48oz container. "
+     "Variable speed control and pulse feature. Used for smoothies and soups for 2 years. "
+     "Motor base in perfect condition. Container and blade assembly recently replaced.",
+     249.00, "APPROVE", "blender"),
+
+    ("carlos", "Keychron Q1 Pro Wireless Mechanical Keyboard", "Electronics",
+     "Keychron Q1 Pro QMK/VIA wireless keyboard in carbon black with Gateron G Pro Red switches. "
+     "Full aluminium body, hot-swappable PCB, RGB backlight. "
+     "Used at home office for 8 months. No keycap shine, all switches working perfectly.",
+     149.00, "APPROVE", "keyboard"),
+
+    ("eve", "Samsung Galaxy S24 Ultra 256GB Titanium", "Electronics",
+     "Samsung Galaxy S24 Ultra 256GB in Titanium Black. Purchased at launch. "
+     "S Pen included. 200MP camera, 6.8-inch QHD+ display. "
+     "Gorilla Glass Armour, no cracks. Comes with box and original charger.",
+     899.00, "APPROVE", "android-phone"),
+
+    ("eve", "Brompton C Line Explore Folding Bike", "Vehicles",
+     "Brompton C Line Explore 6-speed folding bike in Turkish Green. "
+     "2022 model, approximately 200 miles of city commuting. "
+     "Comes with original Brompton bag and rear rack. Folds in under 20 seconds.",
+     1099.00, "APPROVE", "bike"),
+
+    ("eve", "Brooks Ghost 15 Running Shoes UK 9", "Clothing",
+     "Brooks Ghost 15 neutral road running shoes, UK size 9, colour Oyster/Alloy. "
+     "Approximately 80 miles on these. Plenty of cushioning life remaining. "
+     "No upper tears. Selling after switching to a wider fitting shoe.",
+     69.00, "APPROVE", "trainers"),
+
+    ("carlos", "LEGO Technic Porsche 911 42096 Sealed", "Other",
+     "LEGO Technic Porsche 911 RSR set (42096). Brand new, factory sealed, never opened. "
+     "1,580 pieces, 1:8 scale. Discontinued set, hard to find. "
+     "Perfect gift for adults. Stored in smoke-free, dry environment.",
+     189.00, "APPROVE", "lego"),
+
+    ("eve", "Kindle Paperwhite 16GB Signature Edition", "Electronics",
+     "Kindle Paperwhite Signature Edition, 16GB, without ads. "
+     "300 ppi glare-free display, wireless charging, auto-adjusting front light. "
+     "Used for 6 months, pristine condition. Comes with USB-C cable and original box.",
+     139.00, "APPROVE", "ereader"),
+
+    # -----------------------------------------------------------------------
+    # Borderline / REVIEW (10 listings)
+    # -----------------------------------------------------------------------
+    ("carlos", "Phone Unlocking Service All Networks", "Services",
+     "Professional phone unlocking service for all major carriers. Remote unlock within 24 hours. "
+     "Works for iPhone and Android. Permanent unlock, no software required. "
+     "Over 500 satisfied customers. Contact me with your IMEI number.",
+     35.00, "REVIEW", "phone-unlock"),
+
+    ("carlos", "Vintage Military Surplus Jacket US Army M65", "Clothing",
+     "Authentic US Army M65 field jacket from 1970s military surplus. "
+     "Olive drab, size Large Regular. Some wear consistent with age, all buttons intact. "
+     "Collector item, not reproduction. Great for outdoor activities.",
+     85.00, "REVIEW", "army-jacket"),
+
+    ("carlos", "Chemistry Set Advanced Home Lab Kit", "Other",
+     "Advanced chemistry set for serious hobbyists and home experimenters. "
+     "Includes 40+ reagents, glassware, and instruction manual. "
+     "Everything you need for titration, crystallisation, and organic synthesis experiments. "
+     "Suitable for adults only.",
+     120.00, "REVIEW", "chemistry-set"),
+
+    ("bob", "Lockpick Set Professional Grade", "Other",
+     "Professional lockpick set with 24 picks and 4 tension wrenches. "
+     "Stainless steel, lifetime warranty. Used by locksmiths and security professionals. "
+     "Legal in most jurisdictions. Includes carrying case.",
+     55.00, "REVIEW", "lockpick"),
+
+    ("carlos", "Airsoft Rifle Full Auto Electric Blowback", "Other",
+     "Airsoft AEG rifle with full-auto and semi-auto fire modes. "
+     "Electric blowback, 400 FPS with 0.2g BBs. Metal gearbox, polymer body. "
+     "Suitable for skirmish use. Site limits apply. Over 18 only. UK legal.",
+     120.00, "REVIEW", "airsoft"),
+
+    ("eve", "Pre-Workout Supplement High Stim DMAA Formula", "Other",
+     "Importing discontinued high-stimulant pre-workout from US supplier. "
+     "Contains DMAA (1,3-dimethylamylamine) and high-dose caffeine. "
+     "Not for sale to under 18s. Not evaluated by MHRA. Use at your own risk.",
+     45.00, "REVIEW", "supplements"),
+
+    ("bob", "VPN Service Lifetime Subscription All Devices", "Services",
+     "Lifetime VPN subscription for unlimited devices. Based offshore, no-logs policy. "
+     "Bypasses geo-restrictions on all major streaming platforms. "
+     "Includes dedicated IP, P2P optimised servers, and 24/7 support.",
+     29.00, "REVIEW", "vpn-service"),
+
+    ("diana", "Replica Rolex Submariner Watch AAA Grade", "Clothing",
+     "High-quality Rolex Submariner replica, AAA grade. Sapphire crystal glass. "
+     "Automatic movement, keeps accurate time. Looks identical to the genuine article. "
+     "Clearly stated as replica. Not a Rolex-authorised product.",
+     95.00, "REVIEW", "replica-watch"),
+
+    ("carlos", "Kratom Powder Red Vein Borneo 250g", "Other",
+     "Red Vein Borneo kratom powder, 250g resealable pouch. "
+     "Sourced from sustainable Indonesian farms. Finely milled, lab tested for purity. "
+     "Legal in the UK. Not for human consumption. Sold as botanical specimen only.",
+     35.00, "REVIEW", "kratom"),
+
+    ("eve", "Crossbow 80lb Pistol Hunting Legal UK", "Other",
+     "80lb pistol crossbow. Legal to own in the UK for adults. "
+     "Includes 3 aluminium bolts and a quiver. Suitable for target shooting and small game. "
+     "Not a firearm, no licence required. Buyer must be 18+.",
+     49.00, "REVIEW", "crossbow"),
+
+    # -----------------------------------------------------------------------
+    # Clear violations / REJECT (10 listings)
+    # -----------------------------------------------------------------------
+    ("diana", "Louis Vuitton Neverfull MM Brand New", "Clothing",
+     "Brand new Louis Vuitton Neverfull MM tote bag. Monogram canvas with beige interior. "
+     "Gold hardware. Comes with dust bag. Beautiful bag, perfect condition. "
+     "Originally purchased from a supplier in Guangzhou. Great quality.",
+     180.00, "REJECT", "fake-bag"),
+
+    ("diana", "Tramadol 50mg 100 Tablets No Prescription", "Other",
+     "Selling unopened pack of Tramadol 50mg tablets, 100 count. "
+     "Prescription not required for purchase. Fast discreet shipping. "
+     "Contact me for bulk pricing. Multiple packs available.",
+     60.00, "REJECT", "prescription-drugs"),
+
+    ("diana", "Stun Gun 1 Million Volt Self Defence", "Other",
+     "High voltage stun gun for personal protection. 1 million volt output. "
+     "Rechargeable battery, LED flashlight included. Compact design fits in pocket. "
+     "Shipping available to all locations. No questions asked.",
+     45.00, "REJECT", "stun-gun"),
+
+    ("diana", "Get 10000 Instagram Followers Guaranteed", "Services",
+     "Boost your Instagram instantly! 10,000 real-looking followers delivered within 48 hours. "
+     "100% guaranteed or money back. Our bot network ensures rapid growth. "
+     "Safe, permanent, and undetectable. DM for bulk packages.",
+     25.00, "REJECT", "fake-followers"),
+
+    ("diana", "Oxycodone 30mg 50 Tablets No Script Needed", "Other",
+     "Pharmaceutical grade Oxycodone 30mg tablets, 50 count. "
+     "No prescription required. Sourced from licensed overseas pharmacy. "
+     "Discreet packaging, tracked shipping. Contact for volume discounts.",
+     120.00, "REJECT", "prescription-drugs"),
+
+    ("diana", "Fake Nike Air Jordan 1 High OG Chicago", "Clothing",
+     "Perfect replica Nike Air Jordan 1 High OG Chicago colourway. "
+     "1:1 quality, indistinguishable from retail. Correct box, tissue paper, and tag. "
+     "Sourced from same factory as originals. All sizes available.",
+     85.00, "REJECT", "counterfeit-shoes"),
+
+    ("diana", "MacBook Pro 16 M2 IMEI Blocked Lost Report", "Electronics",
+     "MacBook Pro 16-inch M2, selling for parts or repair. "
+     "Activation locked and IMEI flagged as lost. Priced accordingly. "
+     "No questions asked, cash on collection preferred.",
+     300.00, "REJECT", "stolen-device"),
+
+    ("diana", "Netflix Premium 4K Account 12 Months Access", "Services",
+     "Selling access to a shared Netflix Premium 4K account. "
+     "Your own profile, no interruptions. Account is not in your name. "
+     "Payment via crypto only. Message me for details.",
+     18.00, "REJECT", "stolen-account"),
+
+    ("diana", "50000 YouTube Subscribers Real Looking Bots", "Services",
+     "Grow your YouTube channel fast. 50,000 subscribers delivered within 72 hours. "
+     "Bot traffic that passes YouTube's detection systems. "
+     "100% refund if dropped within 30 days. Bulk orders available.",
+     49.00, "REJECT", "fake-subscribers"),
+
+    ("diana", "Fake Gucci Marmont Belt 90cm AAA Rep", "Clothing",
+     "Gucci Marmont double G belt, 90cm, in black leather with gold hardware. "
+     "High-quality replica, purchased from verified supplier. "
+     "Looks identical to the retail product. Not an authorised Gucci item.",
+     55.00, "REJECT", "counterfeit-belt"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -674,20 +840,417 @@ def _draw_fake_followers(draw: ImageDraw.ImageDraw) -> None:
     draw.rounded_rectangle([cx - 25, cy + 94, cx + 25, cy + 100], radius=3, fill=_rgb("#374151"))
 
 
+def _draw_laptop(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY + 10
+    silver = _rgb("#6b7280")
+    dark = _rgb("#1f2937")
+    screen_bg = _rgb("#0f172a")
+    accent = _rgb("#3b82f6")
+    # Base (keyboard section)
+    draw.rounded_rectangle([cx - 140, cy + 20, cx + 140, cy + 80], radius=8, fill=silver)
+    # Keyboard rows
+    for row in range(3):
+        ky = cy + 35 + row * 13
+        for col in range(12):
+            kx = cx - 120 + col * 21
+            draw.rounded_rectangle([kx, ky, kx + 17, ky + 9], radius=2, fill=dark)
+    # Touchpad
+    draw.rounded_rectangle([cx - 35, cy + 55, cx + 35, cy + 75], radius=4, fill=_rgb("#4b5563"))
+    # Lid (screen)
+    draw.rounded_rectangle([cx - 140, cy - 100, cx + 140, cy + 22], radius=10, fill=silver)
+    draw.rounded_rectangle([cx - 132, cy - 93, cx + 132, cy + 16], radius=6, fill=screen_bg)
+    # Screen content
+    draw.rectangle([cx - 100, cy - 70, cx + 100, cy - 55], fill=_rgb("#1e3a8a"))
+    for i in range(3):
+        draw.rounded_rectangle([cx - 100, cy - 48 + i * 18, cx - 10, cy - 38 + i * 18], radius=3, fill=_rgb("#374151"))
+        draw.rounded_rectangle([cx, cy - 48 + i * 18, cx + 60, cy - 38 + i * 18], radius=3, fill=accent)
+    # Webcam
+    draw.ellipse([cx - 4, cy - 96, cx + 4, cy - 88], fill=dark)
+    # Hinge
+    draw.rectangle([cx - 140, cy + 18, cx + 140, cy + 24], fill=_rgb("#374151"))
+
+
+def _draw_console(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    white = _rgb("#f8fafc")
+    dark = _rgb("#0f172a")
+    blue = _rgb("#3b82f6")
+    # Main console body (tall vertical unit)
+    draw.rounded_rectangle([cx - 55, cy - 110, cx + 55, cy + 95], radius=12, fill=white)
+    # Side accent panel
+    draw.rounded_rectangle([cx - 55, cy - 110, cx - 25, cy + 95], radius=12, fill=_rgb("#e2e8f0"))
+    # Disc slot
+    draw.rounded_rectangle([cx - 48, cy - 30, cx + 50, cy - 20], radius=3, fill=_rgb("#cbd5e1"))
+    # USB ports
+    draw.rounded_rectangle([cx - 20, cy + 20, cx + 20, cy + 32], radius=3, fill=_rgb("#94a3b8"))
+    draw.rounded_rectangle([cx - 20, cy + 38, cx + 20, cy + 50], radius=3, fill=_rgb("#94a3b8"))
+    # Power button
+    draw.ellipse([cx + 30, cy + 60, cx + 50, cy + 80], fill=blue)
+    draw.text((cx + 40, cy + 70), "PS", fill=white, font=_font(10), anchor="mm")
+    # Logo area
+    draw.text((cx - 5, cy - 70), "PS5", fill=dark, font=_font(20), anchor="mm")
+    # Curved wing effect
+    draw.arc([cx - 90, cy - 130, cx + 0, cy + 10], start=270, end=90, fill=_rgb("#e2e8f0"), width=20)
+    draw.arc([cx + 0, cy - 130, cx + 90, cy + 10], start=90, end=270, fill=_rgb("#e2e8f0"), width=20)
+
+
+def _draw_drone(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    body = _rgb("#1f2937")
+    arm = _rgb("#374151")
+    prop = _rgb("#6b7280")
+    accent = _rgb("#3b82f6")
+    # Four arms at 45 degree angles
+    for dx, dy in [(-80, -60), (80, -60), (-80, 60), (80, 60)]:
+        draw.line([cx, cy, cx + dx, cy + dy], fill=arm, width=8)
+        # Motor
+        draw.ellipse([cx + dx - 18, cy + dy - 18, cx + dx + 18, cy + dy + 18], fill=body, outline=accent, width=2)
+        # Prop blades
+        draw.ellipse([cx + dx - 35, cy + dy - 6, cx + dx + 35, cy + dy + 6], fill=prop)
+        draw.ellipse([cx + dx - 6, cy + dy - 35, cx + dx + 6, cy + dy + 35], fill=prop)
+    # Central body
+    draw.rounded_rectangle([cx - 35, cy - 25, cx + 35, cy + 25], radius=8, fill=body)
+    # Camera gimbal
+    draw.ellipse([cx - 16, cy + 20, cx + 16, cy + 46], fill=_rgb("#0f172a"), outline=accent, width=2)
+    draw.ellipse([cx - 10, cy + 25, cx + 10, cy + 41], fill=_rgb("#1e3a8a"))
+    # LED indicator
+    draw.ellipse([cx - 5, cy - 10, cx + 5, cy], fill=_rgb("#22c55e"))
+    # Status lights
+    for i, col in enumerate([_rgb("#ef4444"), _rgb("#22c55e"), _rgb("#3b82f6")]):
+        draw.ellipse([cx - 12 + i * 12, cy + 5, cx - 5 + i * 12, cy + 12], fill=col)
+
+
+def _draw_chair(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    black = _rgb("#111827")
+    dark = _rgb("#1f2937")
+    grey = _rgb("#4b5563")
+    mesh = _rgb("#374151")
+    # Five-star base (5 legs radiating)
+    for angle in range(0, 360, 72):
+        ex = cx + int(90 * math.cos(math.radians(angle)))
+        ey = cy + 95 + int(30 * math.sin(math.radians(angle)))
+        draw.line([cx, cy + 90, ex, ey], fill=black, width=8)
+        draw.ellipse([ex - 8, ey - 5, ex + 8, ey + 5], fill=grey)
+    # Gas cylinder / stem
+    draw.rectangle([cx - 10, cy + 30, cx + 10, cy + 92], fill=grey)
+    draw.rectangle([cx - 7, cy + 25, cx + 7, cy + 35], fill=dark)
+    # Seat
+    draw.ellipse([cx - 70, cy + 5, cx + 70, cy + 35], fill=black)
+    # Seat cushion highlight
+    draw.ellipse([cx - 60, cy + 8, cx + 60, cy + 28], fill=dark)
+    # Armrests
+    draw.rounded_rectangle([cx - 85, cy - 20, cx - 60, cy + 20], radius=6, fill=dark)
+    draw.rounded_rectangle([cx + 60, cy - 20, cx + 85, cy + 20], radius=6, fill=dark)
+    draw.line([cx - 72, cy + 5, cx - 72, cy + 20], fill=grey, width=5)
+    draw.line([cx + 72, cy + 5, cx + 72, cy + 20], fill=grey, width=5)
+    # Backrest (mesh effect)
+    draw.rounded_rectangle([cx - 65, cy - 110, cx + 65, cy + 5], radius=10, fill=mesh)
+    for mrow in range(7):
+        for mcol in range(5):
+            mx = cx - 52 + mcol * 26
+            my = cy - 98 + mrow * 17
+            draw.rounded_rectangle([mx, my, mx + 20, my + 12], radius=3, fill=dark)
+    # Headrest
+    draw.rounded_rectangle([cx - 40, cy - 130, cx + 40, cy - 105], radius=8, fill=black)
+
+
+def _draw_guitar(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    wood = _rgb("#92400e")
+    light_wood = _rgb("#b45309")
+    dark = _rgb("#1c0a00")
+    chrome = _rgb("#9ca3af")
+    string = _rgb("#d1d5db")
+    # Body lower bout
+    draw.ellipse([cx - 85, cy + 10, cx + 85, cy + 120], fill=wood)
+    # Body upper bout
+    draw.ellipse([cx - 65, cy - 60, cx + 65, cy + 40], fill=wood)
+    # Waist cutaway
+    draw.ellipse([cx - 40, cy - 20, cx + 40, cy + 40], fill=light_wood)
+    # Sound hole
+    draw.ellipse([cx - 28, cy + 25, cx + 28, cy + 81], fill=dark)
+    draw.ellipse([cx - 22, cy + 31, cx + 22, cy + 75], fill=wood)
+    # Neck
+    draw.rectangle([cx - 14, cy - 140, cx + 14, cy - 55], fill=light_wood)
+    # Fretboard
+    draw.rectangle([cx - 10, cy - 138, cx + 10, cy - 55], fill=dark)
+    # Frets
+    for f in range(6):
+        fy = cy - 125 + f * 14
+        draw.line([cx - 10, fy, cx + 10, fy], fill=chrome, width=2)
+    # Headstock
+    draw.rounded_rectangle([cx - 20, cy - 155, cx + 20, cy - 135], radius=5, fill=light_wood)
+    # Tuning pegs (3 each side)
+    for side, px in [(-1, cx - 25), (1, cx + 25)]:
+        for i in range(3):
+            py = cy - 152 + i * 10
+            draw.ellipse([px - 5, py - 4, px + 5, py + 4], fill=chrome)
+    # Strings
+    for i, sx in enumerate(range(cx - 8, cx + 10, 4)):
+        draw.line([sx, cy - 135, sx, cy + 110], fill=string, width=1)
+    # Bridge
+    draw.rectangle([cx - 25, cy + 85, cx + 25, cy + 95], fill=dark)
+    # Strap button
+    draw.ellipse([cx - 5, cy + 116, cx + 5, cy + 124], fill=chrome)
+
+
+def _draw_camera(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    black = _rgb("#111827")
+    dark = _rgb("#1f2937")
+    silver = _rgb("#6b7280")
+    red = _rgb("#dc2626")
+    glass = _rgb("#1e3a8a")
+    # Camera body
+    draw.rounded_rectangle([cx - 90, cy - 55, cx + 90, cy + 65], radius=10, fill=black)
+    # Viewfinder hump
+    draw.rounded_rectangle([cx - 30, cy - 80, cx + 30, cy - 50], radius=6, fill=dark)
+    # Lens barrel
+    draw.ellipse([cx - 55, cy - 50, cx + 55, cy + 50], fill=_rgb("#0f172a"), outline=silver, width=3)
+    draw.ellipse([cx - 45, cy - 40, cx + 45, cy + 40], fill=dark, outline=silver, width=2)
+    draw.ellipse([cx - 32, cy - 27, cx + 32, cy + 27], fill=glass)
+    draw.ellipse([cx - 20, cy - 15, cx + 20, cy + 15], fill=_rgb("#0c1f5e"))
+    draw.ellipse([cx - 8, cy - 3, cx + 8, cy + 3], fill=_rgb("#93c5fd"))
+    # Shutter button
+    draw.ellipse([cx + 55, cy - 62, cx + 75, cy - 46], fill=red)
+    # Mode dial
+    draw.ellipse([cx + 50, cy - 45, cx + 80, cy - 20], fill=silver)
+    draw.text((cx + 65, cy - 32), "P", fill=black, font=_font(12), anchor="mm")
+    # Hot shoe
+    draw.rectangle([cx - 20, cy - 82, cx + 20, cy - 75], fill=silver)
+    # Logo strip
+    draw.text((cx - 60, cy + 50), "EOS", fill=red, font=_font(14), anchor="mm")
+    # Grip
+    draw.rounded_rectangle([cx + 65, cy - 55, cx + 92, cy + 65], radius=8, fill=_rgb("#1c1c1c"))
+
+
+def _draw_smartwatch(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    case = _rgb("#374151")
+    screen = _rgb("#0f172a")
+    strap = _rgb("#1f2937")
+    accent = _rgb("#22c55e")
+    silver = _rgb("#9ca3af")
+    # Strap top
+    draw.rounded_rectangle([cx - 22, cy - 130, cx + 22, cy - 65], radius=8, fill=strap)
+    # Strap bottom
+    draw.rounded_rectangle([cx - 22, cy + 60, cx + 22, cy + 130], radius=8, fill=strap)
+    # Strap holes
+    for hy in range(cy + 75, cy + 120, 12):
+        draw.ellipse([cx + 10, hy - 3, cx + 18, hy + 3], fill=_rgb("#374151"))
+    # Watch case
+    draw.rounded_rectangle([cx - 50, cy - 68, cx + 50, cy + 62], radius=14, fill=case)
+    # Screen
+    draw.rounded_rectangle([cx - 43, cy - 61, cx + 43, cy + 55], radius=10, fill=screen)
+    # Watch face content
+    draw.text((cx, cy - 28), "12:45", fill=_rgb("#f8fafc"), font=_font(22), anchor="mm")
+    draw.text((cx, cy - 5), "THU 18 JUN", fill=silver, font=_font(10), anchor="mm")
+    # Activity ring
+    draw.arc([cx - 28, cy + 10, cx + 28, cy + 50], start=270, end=200, fill=accent, width=6)
+    draw.arc([cx - 28, cy + 10, cx + 28, cy + 50], start=270, end=160, fill=_rgb("#ef4444"), width=6)
+    # Crown
+    draw.rounded_rectangle([cx + 48, cy - 15, cx + 56, cy + 15], radius=4, fill=silver)
+
+
+def _draw_trainers(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY + 20
+    white = _rgb("#f8fafc")
+    off_white = _rgb("#e2e8f0")
+    sole = _rgb("#9ca3af")
+    lace = _rgb("#374151")
+    # Sole
+    draw.rounded_rectangle([cx - 110, cy + 20, cx + 110, cy + 55], radius=12, fill=sole)
+    draw.rounded_rectangle([cx - 105, cy + 15, cx + 105, cy + 30], radius=8, fill=_rgb("#cbd5e1"))
+    # Upper body
+    draw.polygon([cx - 100, cy + 20, cx + 100, cy + 20, cx + 80, cy - 50, cx - 20, cy - 60], fill=white)
+    # Toe box
+    draw.ellipse([cx + 60, cy - 30, cx + 115, cy + 22], fill=white)
+    # Collar
+    draw.arc([cx - 100, cy - 60, cx + 20, cy + 20], start=270, end=180, fill=off_white, width=14)
+    # Tongue
+    draw.polygon([cx - 40, cy + 20, cx - 10, cy + 20, cx - 5, cy - 55, cx - 35, cy - 55], fill=off_white)
+    # Laces (5 pairs)
+    for i in range(5):
+        ly = cy - 40 + i * 13
+        lx_start = cx - 35 + i * 4
+        lx_end = cx - 12 + i * 4
+        draw.line([lx_start, ly, lx_end, ly - 3], fill=lace, width=2)
+    # Swoosh-like stripe
+    draw.arc([cx - 30, cy - 20, cx + 90, cy + 40], start=190, end=300, fill=_rgb("#374151"), width=5)
+    # Heel tab
+    draw.rectangle([cx - 105, cy - 25, cx - 92, cy + 20], fill=off_white)
+    draw.text((cx - 98, cy - 5), "N", fill=lace, font=_font(14), anchor="mm")
+
+
+def _draw_vacuum(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    purple = _rgb("#7c3aed")
+    silver = _rgb("#9ca3af")
+    dark = _rgb("#1f2937")
+    cyclone = _rgb("#a78bfa")
+    # Wand / stick (angled slightly)
+    draw.polygon([cx - 8, cy - 120, cx + 8, cy - 120, cx + 15, cy + 40, cx - 15, cy + 40], fill=silver)
+    # Floor head
+    draw.rounded_rectangle([cx - 70, cy + 35, cx + 70, cy + 60], radius=8, fill=dark)
+    draw.rounded_rectangle([cx - 65, cy + 40, cx + 65, cy + 55], radius=5, fill=purple)
+    # Main body / cyclone unit (attaches to wand top)
+    draw.rounded_rectangle([cx - 38, cy - 120, cx + 38, cy - 30], radius=12, fill=purple)
+    # Cyclone chambers
+    draw.ellipse([cx - 28, cy - 110, cx - 2, cy - 80], fill=cyclone)
+    draw.ellipse([cx + 2, cy - 110, cx + 28, cy - 80], fill=cyclone)
+    draw.ellipse([cx - 28, cy - 75, cx - 2, cy - 45], fill=cyclone)
+    draw.ellipse([cx + 2, cy - 75, cx + 28, cy - 45], fill=cyclone)
+    # Handle / trigger area
+    draw.rounded_rectangle([cx - 20, cy - 145, cx + 20, cy - 115], radius=8, fill=dark)
+    draw.rounded_rectangle([cx - 12, cy - 135, cx + 12, cy - 118], radius=5, fill=purple)
+    # Battery indicator
+    for i in range(4):
+        fill = _rgb("#22c55e") if i < 3 else _rgb("#374151")
+        draw.rounded_rectangle([cx - 15 + i * 9, cy - 42, cx - 8 + i * 9, cy - 33], radius=2, fill=fill)
+
+
+def _draw_coffee_machine(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    silver = _rgb("#9ca3af")
+    dark = _rgb("#111827")
+    red_btn = _rgb("#dc2626")
+    cream = _rgb("#fef3c7")
+    chrome = _rgb("#d1d5db")
+    # Main body
+    draw.rounded_rectangle([cx - 75, cy - 90, cx + 75, cy + 90], radius=12, fill=silver)
+    draw.rounded_rectangle([cx - 68, cy - 82, cx + 68, cy + 82], radius=8, fill=dark)
+    # Drip tray
+    draw.rounded_rectangle([cx - 60, cy + 55, cx + 60, cy + 90], radius=5, fill=chrome)
+    draw.rounded_rectangle([cx - 55, cy + 58, cx + 55, cy + 85], radius=3, fill=_rgb("#6b7280"))
+    # Cup platform
+    draw.rectangle([cx - 50, cy + 50, cx + 50, cy + 60], fill=chrome)
+    # Coffee cup
+    draw.rounded_rectangle([cx - 18, cy + 15, cx + 18, cy + 52], radius=4, fill=cream)
+    draw.ellipse([cx - 16, cy + 13, cx + 16, cy + 23], fill=cream)
+    draw.arc([cx + 16, cy + 22, cx + 30, cy + 40], start=270, end=90, fill=chrome, width=4)
+    # Steam nozzle
+    draw.rectangle([cx + 45, cy - 30, cx + 55, cy + 30], fill=chrome)
+    draw.ellipse([cx + 43, cy - 36, cx + 57, cy - 24], fill=chrome)
+    # Bean hopper (top)
+    draw.rounded_rectangle([cx - 35, cy - 110, cx + 35, cy - 82], radius=8, fill=_rgb("#374151"))
+    draw.ellipse([cx - 30, cy - 115, cx + 30, cy - 100], fill=dark)
+    draw.ellipse([cx - 24, cy - 113, cx + 24, cy - 103], fill=_rgb("#1c0a00"))
+    # Control buttons
+    for i, col in enumerate([red_btn, _rgb("#f59e0b"), _rgb("#22c55e")]):
+        draw.ellipse([cx - 30 + i * 30, cy - 50, cx - 14 + i * 30, cy - 34], fill=col)
+    # Display strip
+    draw.rounded_rectangle([cx - 50, cy - 75, cx + 50, cy - 55], radius=4, fill=_rgb("#0f172a"))
+    draw.text((cx, cy - 65), "READY", fill=_rgb("#22c55e"), font=_font(11), anchor="mm")
+
+
+def _draw_earbuds(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY
+    white = _rgb("#f8fafc")
+    off_white = _rgb("#e2e8f0")
+    dark = _rgb("#1f2937")
+    silver = _rgb("#9ca3af")
+    # Case body
+    draw.rounded_rectangle([cx - 65, cy - 40, cx + 65, cy + 80], radius=20, fill=white)
+    draw.rounded_rectangle([cx - 60, cy - 35, cx + 60, cy + 75], radius=16, fill=off_white)
+    # Case lid line (open)
+    draw.arc([cx - 65, cy - 80, cx + 65, cy + 10], start=200, end=340, fill=white, width=16)
+    draw.arc([cx - 58, cy - 72, cx + 58, cy + 5], start=205, end=335, fill=off_white, width=10)
+    # Left earbud in case
+    lx, ly = cx - 28, cy + 15
+    draw.ellipse([lx - 18, ly - 24, lx + 18, ly + 24], fill=white, outline=silver, width=1)
+    draw.ellipse([lx - 12, ly - 18, lx + 12, ly + 18], fill=off_white)
+    draw.rounded_rectangle([lx - 6, ly + 20, lx + 6, ly + 55], radius=5, fill=white)
+    # Right earbud in case
+    rx, ry = cx + 28, cy + 15
+    draw.ellipse([rx - 18, ry - 24, rx + 18, ry + 24], fill=white, outline=silver, width=1)
+    draw.ellipse([rx - 12, ry - 18, rx + 12, ry + 18], fill=off_white)
+    draw.rounded_rectangle([rx - 6, ry + 20, rx + 6, ry + 55], radius=5, fill=white)
+    # Charging LED
+    draw.ellipse([cx - 5, cy + 68, cx + 5, cy + 76], fill=_rgb("#22c55e"))
+    # Lightning connector at base
+    draw.rounded_rectangle([cx - 8, cy + 78, cx + 8, cy + 88], radius=3, fill=silver)
+
+
+def _draw_tent(draw: ImageDraw.ImageDraw) -> None:
+    cx, cy = _CX, _CY + 20
+    green = _rgb("#166534")
+    light_green = _rgb("#22c55e")
+    grey = _rgb("#9ca3af")
+    dark = _rgb("#14532d")
+    # Ground / shadow
+    draw.ellipse([cx - 130, cy + 45, cx + 130, cy + 65], fill=_rgb("#374151"))
+    # Main tent body (large triangle)
+    draw.polygon([cx, cy - 110, cx - 130, cy + 50, cx + 130, cy + 50], fill=green)
+    # Front face panel (lighter)
+    draw.polygon([cx, cy - 110, cx - 30, cy + 50, cx + 30, cy + 50], fill=light_green)
+    # Door zip
+    draw.arc([cx - 25, cy - 40, cx + 25, cy + 50], start=270, end=90, fill=dark, width=3)
+    draw.ellipse([cx - 5, cy + 25, cx + 5, cy + 35], fill=grey)
+    # Tent poles (visible at sides)
+    draw.line([cx - 130, cy + 50, cx, cy - 110], fill=grey, width=3)
+    draw.line([cx + 130, cy + 50, cx, cy - 110], fill=grey, width=3)
+    # Guy ropes
+    draw.line([cx - 100, cy + 10, cx - 150, cy + 50], fill=_rgb("#f59e0b"), width=2)
+    draw.line([cx + 100, cy + 10, cx + 150, cy + 50], fill=_rgb("#f59e0b"), width=2)
+    # Pegs
+    draw.line([cx - 150, cy + 48, cx - 145, cy + 58], fill=grey, width=3)
+    draw.line([cx + 150, cy + 48, cx + 145, cy + 58], fill=grey, width=3)
+    # Ventilation window
+    draw.polygon([cx, cy - 108, cx - 20, cy - 70, cx + 20, cy - 70], fill=_rgb("#bbf7d0"))
+
+
 _DRAW_FNS = {
-    "iphone":            _draw_iphone,
-    "jeans":             _draw_jeans,
-    "mixer":             _draw_mixer,
-    "bike":              _draw_bike,
-    "headphones":        _draw_headphones,
-    "phone-unlock":      _draw_phone_unlock,
-    "army-jacket":       _draw_army_jacket,
-    "chemistry-set":     _draw_chemistry_set,
-    "lockpick":          _draw_lockpick,
-    "fake-bag":          _draw_fake_bag,
+    # Original 13
+    "iphone":             _draw_iphone,
+    "jeans":              _draw_jeans,
+    "mixer":              _draw_mixer,
+    "bike":               _draw_bike,
+    "headphones":         _draw_headphones,
+    "phone-unlock":       _draw_phone_unlock,
+    "army-jacket":        _draw_army_jacket,
+    "chemistry-set":      _draw_chemistry_set,
+    "lockpick":           _draw_lockpick,
+    "fake-bag":           _draw_fake_bag,
     "prescription-drugs": _draw_pills,
-    "stun-gun":          _draw_stun_gun,
-    "fake-followers":    _draw_fake_followers,
+    "stun-gun":           _draw_stun_gun,
+    "fake-followers":     _draw_fake_followers,
+    # New product types
+    "laptop":             _draw_laptop,
+    "console":            _draw_console,
+    "drone":              _draw_drone,
+    "chair":              _draw_chair,
+    "guitar":             _draw_guitar,
+    "camera":             _draw_camera,
+    "smartwatch":         _draw_smartwatch,
+    "trainers":           _draw_trainers,
+    "vacuum":             _draw_vacuum,
+    "coffee-machine":     _draw_coffee_machine,
+    "earbuds":            _draw_earbuds,
+    "tent":               _draw_tent,
+    # Reused functions for visually similar products
+    "road-bike":          _draw_bike,
+    "blender":            _draw_mixer,
+    "android-phone":      _draw_iphone,
+    "speaker":            _draw_headphones,
+    "tablet":             _draw_iphone,
+    "ereader":            _draw_iphone,
+    "bbq":                _draw_mixer,
+    "lego":               _draw_chemistry_set,
+    "keyboard":           _draw_laptop,
+    "winter-jacket":      _draw_army_jacket,
+    "running-shoes":      _draw_trainers,
+    "airsoft":            _draw_stun_gun,
+    "supplements":        _draw_pills,
+    "vpn-service":        _draw_phone_unlock,
+    "replica-watch":      _draw_smartwatch,
+    "kratom":             _draw_pills,
+    "crossbow":           _draw_army_jacket,
+    "counterfeit-shoes":  _draw_trainers,
+    "stolen-device":      _draw_laptop,
+    "stolen-account":     _draw_fake_followers,
+    "fake-subscribers":   _draw_fake_followers,
+    "counterfeit-belt":   _draw_fake_bag,
 }
 
 # Background colours per image key
@@ -705,6 +1268,40 @@ _BG = {
     "prescription-drugs": ("#08101a", "#0c1828"),
     "stun-gun":           ("#040408", "#080810"),
     "fake-followers":     ("#0d0820", "#140c2c"),
+    "laptop":             ("#0a0f1a", "#101828"),
+    "console":            ("#080818", "#0e1222"),
+    "drone":              ("#060a10", "#0c1018"),
+    "chair":              ("#080a0c", "#0f1214"),
+    "guitar":             ("#1a0800", "#2a1000"),
+    "camera":             ("#060808", "#0c1010"),
+    "smartwatch":         ("#080c08", "#101410"),
+    "trainers":           ("#0a0c10", "#12141a"),
+    "vacuum":             ("#10081a", "#180c28"),
+    "coffee-machine":     ("#100808", "#1a1010"),
+    "earbuds":            ("#0a0c10", "#12141a"),
+    "tent":               ("#04100a", "#081a10"),
+    "road-bike":          ("#0e1218", "#141c24"),
+    "blender":            ("#160606", "#220a0a"),
+    "android-phone":      ("#060a10", "#0c1018"),
+    "speaker":            ("#080a0e", "#10121a"),
+    "tablet":             ("#080a14", "#0e1020"),
+    "ereader":            ("#060606", "#101010"),
+    "bbq":                ("#0c0606", "#160a0a"),
+    "lego":               ("#0a0808", "#140c0c"),
+    "keyboard":           ("#06080c", "#0c1018"),
+    "winter-jacket":      ("#080e14", "#101828"),
+    "running-shoes":      ("#060a08", "#0c1410"),
+    "airsoft":            ("#060606", "#0c0c0c"),
+    "supplements":        ("#0a0810", "#14101a"),
+    "vpn-service":        ("#060e10", "#0c1418"),
+    "replica-watch":      ("#080a08", "#10120e"),
+    "kratom":             ("#080c08", "#101410"),
+    "crossbow":           ("#080a06", "#10120a"),
+    "counterfeit-shoes":  ("#080a0c", "#10121a"),
+    "stolen-device":      ("#080808", "#101010"),
+    "stolen-account":     ("#0a0820", "#10102c"),
+    "fake-subscribers":   ("#0c0820", "#14102c"),
+    "counterfeit-belt":   ("#14100a", "#1e180e"),
 }
 
 # Header accent colours per key
@@ -722,6 +1319,40 @@ _ACCENT = {
     "prescription-drugs": "#dc2626",
     "stun-gun":           "#fbbf24",
     "fake-followers":     "#7c3aed",
+    "laptop":             "#64748b",
+    "console":            "#3b82f6",
+    "drone":              "#0ea5e9",
+    "chair":              "#374151",
+    "guitar":             "#b45309",
+    "camera":             "#dc2626",
+    "smartwatch":         "#22c55e",
+    "trainers":           "#6b7280",
+    "vacuum":             "#7c3aed",
+    "coffee-machine":     "#92400e",
+    "earbuds":            "#94a3b8",
+    "tent":               "#16a34a",
+    "road-bike":          "#ea580c",
+    "blender":            "#b91c1c",
+    "android-phone":      "#0284c7",
+    "speaker":            "#4f46e5",
+    "tablet":             "#0891b2",
+    "ereader":            "#374151",
+    "bbq":                "#9a3412",
+    "lego":               "#b91c1c",
+    "keyboard":           "#4338ca",
+    "winter-jacket":      "#1d4ed8",
+    "running-shoes":      "#15803d",
+    "airsoft":            "#4b5563",
+    "supplements":        "#7c3aed",
+    "vpn-service":        "#0e7490",
+    "replica-watch":      "#4b5563",
+    "kratom":             "#15803d",
+    "crossbow":           "#374151",
+    "counterfeit-shoes":  "#4b5563",
+    "stolen-device":      "#6b7280",
+    "stolen-account":     "#6d28d9",
+    "fake-subscribers":   "#7e22ce",
+    "counterfeit-belt":   "#92400e",
 }
 
 
