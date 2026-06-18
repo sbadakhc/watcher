@@ -817,12 +817,14 @@ def _check_ollama_models():
         req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
-        available = {m["name"] for m in data.get("models", [])}
+        available = {m["name"].lower() for m in data.get("models", [])}
+        text_ok = TEXT_MODEL.lower() in available
+        vision_ok = VISION_MODEL.lower() in available
         return {
-            "status": "ok" if (TEXT_MODEL in available and VISION_MODEL in available) else "degraded",
+            "status": "ok" if (text_ok and vision_ok) else "degraded",
             "ollama_url": OLLAMA_URL,
-            "text_model": {"name": TEXT_MODEL, "available": TEXT_MODEL in available},
-            "vision_model": {"name": VISION_MODEL, "available": VISION_MODEL in available},
+            "text_model": {"name": TEXT_MODEL, "available": text_ok},
+            "vision_model": {"name": VISION_MODEL, "available": vision_ok},
         }
     except Exception as exc:
         return {
